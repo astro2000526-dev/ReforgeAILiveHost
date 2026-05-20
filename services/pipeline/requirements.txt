@@ -1,0 +1,12 @@
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+# pydantic + httpx are loosely pinned because supabase==2.9.1 needs
+# httpx<0.28 and pulls in a newer pydantic — the strict pins we had before
+# (pydantic 2.10.3 / httpx 0.28.1) caused pip to roll them back on install.
+pydantic>=2.10,<3
+python-dotenv==1.0.1
+# edge-tts is kept for the fallback provider; Volcengine uses httpx directly.
+edge-tts==7.0.0
+httpx>=0.27,<0.28
+# Storage upload + (eventually) any DB writes from the pipeline side.
+supabase==2.9.1

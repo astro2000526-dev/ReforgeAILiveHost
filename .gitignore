@@ -1,0 +1,52 @@
+# Node
+node_modules/
+.next/
+out/
+dist/
+build/
+.turbo/
+*.log
+.env
+.env.local
+.env*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project: runtime artifacts (generated videos, downloaded templates, tmp)
+services/pipeline/tmp/
+services/pipeline/cache/
+services/pipeline/output/
+
+# Local binaries (e.g. ffmpeg static build for Windows dev)
+tools/
+
+# Personal test assets (large media you tried locally; don't ship)
+testvideo.mp4
+*.local.mp4
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Secrets
+.env
+*.pem
+*.key
