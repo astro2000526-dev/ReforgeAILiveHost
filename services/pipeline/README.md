@@ -24,18 +24,46 @@ concat, transcode, RTMP push) without a GPU.
 python -m scripts.smoke_test  # generates output\smoke.mp4 from a tiny test clip
 ```
 
-## RunPod deployment (Day 3-4)
+## GPU pod deployment (AutoDL recommended)
 
-1. Spin up an RTX 4090 / A10 pod with the PyTorch CUDA image.
-2. Clone repo, install `requirements.txt` plus MuseTalk:
+We use **AutoDL** (autodl.com) for the GPU box: RTX 4090 at ~¥1.5/h按量, paid
+via Alipay/Wechat, GPU billing pauses on shutdown. RunPod / 火山引擎 / 阿里云
+ECS work too — the commands below are the same, only the provider differs.
+
+1. Create a pod with image **PyTorch 2.x + CUDA 12.x** on a **RTX 4090** (or
+   A10/3090 if 4090 isn't available — slower but works). Put the repo on the
+   pod's data disk (`/root/autodl-tmp/` on AutoDL).
+2. SSH into the pod and clone this repo:
    ```bash
-   git clone https://github.com/TMElyralab/MuseTalk
-   # follow their README for model weights + deps
+   cd /root/autodl-tmp
+   git clone <this-repo> reforge
+   cd reforge/services/pipeline
    ```
-3. `MUSETALK_ENABLED=1` and `MUSETALK_PATH=/workspace/MuseTalk` in `.env`.
-4. `uvicorn app.main:app --host 0.0.0.0 --port 8000`.
-5. Expose with the pod's public TCP / HTTPS proxy, lock down with an API key
-   header before exposing publicly.
+3. Run the bootstrap script — it installs ffmpeg, clones MuseTalk, downloads
+   the v1.5 weights (via `hf-mirror.com`, works from inside mainland China),
+   installs all Python deps, and pre-fills the MuseTalk paths in `.env`:
+   ```bash
+   bash scripts/bootstrap_pod.sh
+   ```
+   Allow ~10-15 min for the weight download (10-15GB). The script verifies the
+   key files exist and aborts loudly if anything is missing.
+4. Edit `.env` and fill in the secrets the script can't know:
+   - `VOLCENGINE_APPID` / `VOLCENGINE_ACCESS_TOKEN`
+   - `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` / `SUPABASE_STORAGE_BUCKET`
+5. Start the service:
+   ```bash
+   uvicorn app.main:app --host 0.0.0.0 --port 8000
+   ```
+6. Smoke test the MuseTalk call ONCE before exposing publicly:
+   ```bash
+   curl -X POST http://localhost:8000/generate -H 'content-type: application/json' \
+        -d '{"project_id":"smoke","avatar_template_url":"...","script_segments":[{"type":"intro","text":"测试"}],"voice":"BV001_streaming","rate":"+0%"}'
+   curl http://localhost:8000/generate/smoke   # poll until status=done or failed
+   ```
+   If MuseTalk fails, the response `message` holds the last 30 lines of stderr
+   — read it, do not retry blindly.
+7. Expose via AutoDL's custom port (or RunPod's HTTPS proxy). Gate with an API
+   key header before pointing the Vercel front-end at it.
 
 ## Endpoints
 
