@@ -16,6 +16,7 @@ from typing import Callable, Awaitable
 import httpx
 
 from .config import TMP_DIR, OUTPUT_DIR
+from .face_restore import restore_faces
 from .ffmpeg_ops import concat_audio, transcode_for_streaming
 from .musetalk import run_lipsync
 from .storage import StorageError, storage_enabled, upload_video
@@ -90,9 +91,13 @@ async def generate(
     lipsynced = work / "lipsynced.mp4"
     await run_lipsync(template_path, full_audio, lipsynced)
 
+    await progress("face_restore", 75)
+    restored = work / "restored.mp4"
+    await restore_faces(lipsynced, restored)
+
     await progress("transcode", 85)
     final = OUTPUT_DIR / f"{inp.project_id}.mp4"
-    await transcode_for_streaming(lipsynced, final)
+    await transcode_for_streaming(restored, final)
 
     url: str | None = None
     if storage_enabled():
