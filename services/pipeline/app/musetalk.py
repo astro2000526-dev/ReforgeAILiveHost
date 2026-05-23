@@ -85,11 +85,16 @@ def _write_task_yaml(
     # All inputs come from inside our own pipeline (downloaded template, TTS
     # concat output) so the paths never contain quote characters. as_posix()
     # gives forward-slash paths that are unambiguous on both Linux and Windows.
+    #
+    # result_name MUST include the .mp4 extension. MuseTalk passes this string
+    # verbatim to ffmpeg as the output filename; without an extension ffmpeg
+    # fails with "Unable to find a suitable output format" but MuseTalk exits 0
+    # anyway, silently producing no output. Found the hard way 2026-05-23.
     yaml_path.write_text(
         "task_0:\n"
         f'  video_path: "{video_path.as_posix()}"\n'
         f'  audio_path: "{audio_path.as_posix()}"\n'
-        f'  result_name: "{result_name}"\n',
+        f'  result_name: "{result_name}.mp4"\n',
         encoding="utf-8",
     )
 
