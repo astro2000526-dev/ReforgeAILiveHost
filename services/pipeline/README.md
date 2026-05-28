@@ -24,7 +24,109 @@ concat, transcode, RTMP push) without a GPU.
 python -m scripts.smoke_test  # generates output\smoke.mp4 from a tiny test clip
 ```
 
-## GPU pod deployment (AutoDL recommended)
+## Docker deployment (UCloud / any NVIDIA host) — recommended
+
+Single-command setup. Use this for any Linux GPU host with the NVIDIA Container
+Toolkit installed (`nvidia-container-cli info` works).
+
+### 1. Prereqs on the host
+
+```bash
+# Verify GPU + toolkit
+nvidia-smi
+nvidia-container-cli info
+
+# Verify Docker (24+) + compose v2
+docker --version
+docker compose version
+```
+
+### 2. Clone + configure
+
+```bash
+git clone <this-repo> ReforgeAILiveHost
+cd ReforgeAILiveHost/services/pipeline
+cp .env.example .env
+# Fill in PIPELINE_TOKEN (openssl rand -base64 48), Azure/Volcengine,
+# Supabase URL + SERVICE_KEY. See .env.example for required keys.
+```
+
+### 3. Bring it up
+
+```bash
+docker compose up -d
+docker compose logs -f pipeline    # watch first-boot weight download (~10-15 min)
+```
+
+The entrypoint downloads ~15 GB of MuseTalk + SD-VAE + Whisper weights into
+`./data/models/` on first boot. Subsequent restarts reuse the volume so they
+take seconds, not minutes.
+
+### 4. Smoke test
+
+```bash
+# Health (no auth)
+curl http://localhost:8000/health
+# Authenticated request (replace TOKEN with PIPELINE_TOKEN from .env)
+curl -X POST http://localhost:8000/generate \
+     -H "Authorization: Bearer ${PIPELINE_TOKEN}" \
+     -H "Content-Type: application/json" \
+     -d '{"project_id":"smoke","avatar_template_url":"<url>","script_segments":[{"type":"intro","text":"测试"}],"voice":"BV001_streaming","rate":"+0%"}'
+```
+
+### 5. Update / redeploy
+
+From your laptop, with `PIPELINE_SSH=user@gpu-host` exported:
+
+```bash
+bash services/pipeline/deploy.sh             # pull + rebuild + up -d
+bash services/pipeline/deploy.sh --no-build  # just restart with current image
+bash services/pipeline/deploy.sh --rebuild   # force clean rebuild
+```
+
+Without `PIPELINE_SSH` the script runs locally on whatever host you're on.
+
+### Volume layout
+
+```
+services/pipeline/
+├── data/
+│   ├── models/        # MuseTalk weights (volume, persistent)
+│   ├── tmp/           # per-job staging (volume, persistent)
+│   └── output/        # finished mp4 cache (volume, persistent)
+├── docker-compose.yml
+├── Dockerfile
+├── docker-entrypoint.sh
+└── .env               # never committed
+```
+
+`data/` lives on the host so a `docker compose down && docker compose up` does
+NOT wipe your weights. To start completely fresh: `rm -rf data/models` then
+restart.
+
+### Reverse-proxy + TLS (production)
+
+The compose file binds 0.0.0.0:8000 directly for first-time setup. In
+production put Caddy or nginx in front and only expose 443:
+
+```
+seller browser → Vercel (web) → caddy:443 → pipeline:8000
+                                  (TLS terminates here)
+```
+
+Caddyfile (minimal):
+```
+gpu.reforge.example.com {
+    reverse_proxy pipeline:8000
+}
+```
+
+Then in compose, change `ports: ["8000:8000"]` to `expose: ["8000"]` so the
+port is only reachable on the internal docker network.
+
+---
+
+## GPU pod deployment (AutoDL / bare-metal) — alternative
 
 We use **AutoDL** (autodl.com) for the GPU box: RTX 4090 at ~¥1.5/h按量, paid
 via Alipay/Wechat, GPU billing pauses on shutdown. RunPod / 火山引擎 / 阿里云

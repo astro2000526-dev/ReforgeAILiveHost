@@ -1,0 +1,74 @@
+# ReforgeAILiveHost — pipeline service (GPU)
+#
+# Run on the UCloud (or any) GPU host:
+#   cd services/pipeline
+#   cp .env.example .env       # fill in secrets, then
+#   docker compose up -d
+#
+# First boot downloads ~15GB of model weights into ./data/models — give it
+# 10-15 minutes. Subsequent restarts reuse the volume so it's instant.
+#
+# Prereqs on host:
+#   - Docker Engine 24+
+#   - NVIDIA Container Toolkit installed (nvidia-container-cli info should work)
+#   - At least 1 NVIDIA GPU with driver supporting CUDA 12.1
+
+services:
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Pin the MuseTalk commit when you've validated a working build.
+      # args:
+      #   MUSETALK_GIT_REF: <sha>
+    image: reforge-pipeline:latest
+    container_name: reforge-pipeline
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    ports:
+      # Bind to 127.0.0.1 in prod and put a reverse proxy in front (Caddy /
+      # nginx) so the Bearer token is the only auth between Web and pipeline.
+      # For initial bring-up we expose 0.0.0.0:8000 directly.
+      - "8000:8000"
+
+    # GPU access — see .kasidit/knowledge/docker-compose-gpu.md
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    volumes:
+      # Model weights: ~15GB, downloaded by entrypoint on first run, persisted
+      # across container restarts. Host path is bind-mounted so a manual
+      # download/swap is easy.
+      - ./data/models:/workspace/MuseTalk/models
+      # Per-job staging (downloaded templates, intermediate frames). Persisted
+      # so a crash mid-job doesn't lose the partial work; cleanup runs on next
+      # successful job.
+      - ./data/tmp:/workspace/tmp
+      # Finished mp4s before upload. Keep on disk for manual debugging.
+      - ./data/output:/workspace/output
+
+    # SIGTERM gracefully stops uvicorn → it tears down BackgroundTasks +
+    # subprocesses. ffmpeg children should exit within a few seconds; give
+    # them headroom before SIGKILL.
+    stop_grace_period: 30s
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"

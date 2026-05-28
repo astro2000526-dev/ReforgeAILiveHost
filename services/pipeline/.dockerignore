@@ -1,0 +1,48 @@
+# Don't ship runtime state, secrets, or local caches into the image.
+# Keep the build context lean to speed up COPY layers.
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Runtime artifacts (generated mp4, downloaded templates, intermediate frames)
+tmp/
+output/
+cache/
+data/
+runtime/
+
+# MuseTalk repo (cloned fresh in Dockerfile — never ship a local checkout)
+MuseTalk/
+
+# Secrets — must be supplied via env_file at runtime, not baked into image
+.env
+.env.*
+!.env.example
+
+# Dev / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Docs (already in README; no need in image)
+*.md
+!README.md
+
+# Git metadata
+.git/
+.gitignore
+
+# Logs
+*.log
+logs/

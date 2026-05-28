@@ -50,3 +50,8 @@ testvideo.mp4
 .env
 *.pem
 *.key
+
+# Kasidit privacy guard (kasi-init step 11)
+.kasidit/knowledge/*.private.md
+.kasidit/config.json
+# Do NOT commit ~/.claude/skills/kasidit/center/logs/ anywhere — contains prompts.
