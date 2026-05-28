@@ -33,10 +33,21 @@ const SEGMENT_LABEL: Record<string, string> = {
 }
 
 const VOICE_OPTIONS = [
-  { id: 'BV001_streaming', label: '通用女声（默认）', hint: '稳重清晰，适合大多数品类' },
-  { id: 'BV700_streaming', label: '灿灿（活泼）', hint: '亲和有活力，适合美妆/服饰' },
-  { id: 'BV421_streaming', label: '天才少女（多语言）', hint: '兼容中文+东南亚语种' },
+  // 中文（火山引擎）
+  { id: 'BV001_streaming', label: '通用女声 · 中文', hint: '稳重清晰，适合大多数品类', lang: 'zh-CN' },
+  { id: 'BV700_streaming', label: '灿灿（活泼）· 中文', hint: '亲和有活力，适合美妆/服饰', lang: 'zh-CN' },
+  { id: 'BV421_streaming', label: '天才少女 · 多语言', hint: '中文 / 越南语 / 印尼语兼容', lang: 'zh-CN' },
+  // 泰语（Azure 神经语音）— SEA 主打
+  { id: 'th-TH-PremwadeeNeural', label: 'Premwadee（专业女声）· 泰语', hint: '温和专业，适合健康/私护/美妆', lang: 'th-TH' },
+  { id: 'th-TH-NiwatNeural', label: 'Niwat（男声）· 泰语', hint: '中性稳重，适合 3C/家电', lang: 'th-TH' },
 ]
+
+// Cheap language detector: Thai uses the U+0E00-U+0E7F range, any character
+// in that range means the user typed Thai product info, so we should pull
+// the Thai script template + suggest the Thai voice.
+function detectLanguage(text: string): 'zh-CN' | 'th-TH' {
+  return /[฀-๿]/.test(text) ? 'th-TH' : 'zh-CN'
+}
 
 const RATE_OPTIONS = [
   { id: '-10%', label: '慢' },
@@ -99,6 +110,11 @@ export default function NewProjectPage() {
         .split(/[\n,，]/)
         .map((s) => s.trim())
         .filter(Boolean)
+      const language = detectLanguage(productTitle + ' ' + sellingPointsText)
+      // Auto-suggest the matching voice: Thai script → Thai voice, else default.
+      if (language === 'th-TH' && voice.startsWith('BV')) {
+        setVoice('th-TH-PremwadeeNeural')
+      }
       const r = await fetch('/api/projects/draft/script', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -107,7 +123,7 @@ export default function NewProjectPage() {
           price_now: priceNow ? Number(priceNow) : undefined,
           price_original: priceOriginal ? Number(priceOriginal) : undefined,
           selling_points: sellingPoints.length ? sellingPoints : undefined,
-          language: 'zh-CN',
+          language,
         }),
       })
       if (!r.ok) throw new Error(`脚本生成失败 (HTTP ${r.status})`)
@@ -130,13 +146,16 @@ export default function NewProjectPage() {
         .split(/[\n,，]/)
         .map((s) => s.trim())
         .filter(Boolean)
+      // Derive language from the selected voice — Thai voice → th-TH, etc.
+      const voiceOption = VOICE_OPTIONS.find((v) => v.id === voice)
+      const language = voiceOption?.lang ?? 'zh-CN'
       const r = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: projectName.trim() || '未命名直播',
           avatar_id: avatarId,
-          language: 'zh-CN',
+          language,
           voice,
           speech_rate: speechRate,
           product_info: {

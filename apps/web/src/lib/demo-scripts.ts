@@ -9,6 +9,12 @@
 //   - Each segment ~80–120 chars (~30 seconds of speech at default rate)
 //   - Mandarin 直播带货 register: 家人们 / 宝子们 / 小黄车 / 限量
 //   - Specific numbers > vague claims ("原价 199 现价 99" > "超便宜")
+//
+// Thai scripts for intimate-care category MUST avoid TikTok-sensitive words:
+//   ❌ ช่องคลอด, เซ็กส์, อวัยวะเพศ (direct anatomical / sexual terms)
+//   ✅ จุดซ่อนเร้น, บริเวณส่วนตัว, ดูแลสุขภาพ, สมดุล pH
+// The female intimate-care category is heavily moderated on TikTok TH;
+// scripts here lean medical / wellness framing, not allure.
 
 export type SegmentType = 'intro' | 'pain' | 'product' | 'demo' | 'price' | 'cta'
 
@@ -21,6 +27,7 @@ export type ScriptSegment = {
 export type DemoScript = {
   productTitle: string
   productKeywords: string[]
+  language: 'zh-CN' | 'th-TH'
   priceOriginal: number
   priceNow: number
   sellingPoints: string[]
@@ -31,6 +38,7 @@ export const DEMO_SCRIPTS: DemoScript[] = [
   {
     productTitle: '烟酰胺精华液 30ml',
     productKeywords: ['烟酰胺', '精华', '美白', '护肤', '面部', '提亮'],
+    language: 'zh-CN',
     priceOriginal: 199,
     priceNow: 99,
     sellingPoints: ['5% 黄金浓度', 'B5 修护', '敏感肌可用', '30ml 大容量'],
@@ -70,6 +78,7 @@ export const DEMO_SCRIPTS: DemoScript[] = [
   {
     productTitle: '儿童益生菌粉 30 袋装',
     productKeywords: ['益生菌', '宝宝', '儿童', '婴幼儿', '母婴', '调理', '肠道'],
+    language: 'zh-CN',
     priceOriginal: 198,
     priceNow: 99,
     sellingPoints: ['丹麦科汉森菌株', '100 亿活菌每袋', '0 添加 0 蔗糖', '6 个月以上可食用'],
@@ -109,6 +118,7 @@ export const DEMO_SCRIPTS: DemoScript[] = [
   {
     productTitle: '4L 大容量气炸锅',
     productKeywords: ['气炸锅', '空气炸锅', '厨房', '电器', '小家电', '炸锅', '减脂'],
+    language: 'zh-CN',
     priceOriginal: 399,
     priceNow: 199,
     sellingPoints: ['4L 大容量', '可视化窗口', '减脂 90%', '一锅多用'],
@@ -145,18 +155,112 @@ export const DEMO_SCRIPTS: DemoScript[] = [
       },
     ],
   },
+  {
+    productTitle: '女性私密护理洗液 200ml',
+    productKeywords: ['私密', '私护', '洗液', 'intimate', 'feminine', '护理'],
+    language: 'zh-CN',
+    priceOriginal: 299,
+    priceNow: 99,
+    sellingPoints: ['pH 5.5 弱酸性', '天然植物配方', '无香精无色素', '医师推荐'],
+    segments: [
+      {
+        type: 'intro',
+        text: '姐妹们好，欢迎来到健康直播间。今天给大家带来一款医师都在用的私密护理洗液，关注一下账号不错过下一场。',
+        duration_sec: 32,
+      },
+      {
+        type: 'pain',
+        text: '姐妹们是不是经常觉得私密部位不舒服？换季有异味？普通沐浴露太刺激，越洗越敏感？这是私密肌肤 pH 失衡了。',
+        duration_sec: 32,
+      },
+      {
+        type: 'product',
+        text: '这款私密护理洗液，pH 5.5 弱酸性，跟人体私密肌肤天然环境一致，天然植物配方，无香精无色素，孕妈也能用。',
+        duration_sec: 34,
+      },
+      {
+        type: 'demo',
+        text: '看这质地，泡沫细腻不刺激。坚持用一个月，姐妹们都反馈干爽不闷不痒，整个人状态都不一样了，真心推荐。',
+        duration_sec: 34,
+      },
+      {
+        type: 'price',
+        text: '专柜原价 299 一瓶，今天直播间限时 99！买两瓶送 50 毫升旅行装，相当于免费多送你 1/4 瓶！',
+        duration_sec: 32,
+      },
+      {
+        type: 'cta',
+        text: '库存只剩 80 单，姐妹们点小黄车立即下单，过了今晚恢复原价！要囤的赶紧拍！',
+        duration_sec: 28,
+      },
+    ],
+  },
+  {
+    productTitle: 'ผลิตภัณฑ์ดูแลจุดซ่อนเร้น 200 มล.',
+    productKeywords: [
+      'intimate', 'feminine', 'ดูแล', 'จุดซ่อนเร้น', 'pH', 'private care',
+      '私密', '私护', '泰', 'thai',
+    ],
+    language: 'th-TH',
+    priceOriginal: 599,
+    priceNow: 199,
+    sellingPoints: ['pH 5.5 สมดุล', 'สารสกัดธรรมชาติ', 'ไม่มีน้ำหอม', 'แนะนำโดยแพทย์'],
+    segments: [
+      {
+        type: 'intro',
+        text: 'สวัสดีค่ะคุณผู้หญิงทุกท่าน ยินดีต้อนรับสู่ห้องไลฟ์สุขภาพของเรา วันนี้เรามีผลิตภัณฑ์ดูแลจุดซ่อนเร้นที่แพทย์แนะนำมาฝากทุกท่าน',
+        duration_sec: 32,
+      },
+      {
+        type: 'pain',
+        text: 'พี่น้องผู้หญิงเคยรู้สึกระคายเคืองบริเวณส่วนตัวไหมคะ ใช้สบู่ทั่วไปแล้วยิ่งแห้งยิ่งคัน ลองหลายสูตรก็ยังไม่หายสักที',
+        duration_sec: 32,
+      },
+      {
+        type: 'product',
+        text: 'ผลิตภัณฑ์ตัวนี้มี pH 5.5 สมดุลตามธรรมชาติของผิว ใช้สารสกัดธรรมชาติ ไม่มีน้ำหอม ไม่มีสี อ่อนโยนแม้แต่คุณแม่ตั้งครรภ์ก็ใช้ได้',
+        duration_sec: 36,
+      },
+      {
+        type: 'demo',
+        text: 'เนื้อสัมผัสนุ่มนวล ฟองละเอียด ไม่แสบ ใช้ติดต่อกัน 1 เดือน ลูกค้ารีวิวว่าหายระคายเคือง สดชื่นทั้งวัน มั่นใจขึ้นมาก',
+        duration_sec: 34,
+      },
+      {
+        type: 'price',
+        text: 'ราคาปกติ 599 บาท วันนี้ในไลฟ์ลดเหลือเพียง 199 บาท ซื้อ 2 ขวดแถมขวดเดินทาง 50 มล. ฟรี คุ้มมาก',
+        duration_sec: 32,
+      },
+      {
+        type: 'cta',
+        text: 'จำนวนจำกัด เหลือ 80 ชิ้นแล้ว กดตะกร้าสีเหลืองสั่งเลย พลาดวันนี้ราคากลับเป็น 599 ทันที',
+        duration_sec: 30,
+      },
+    ],
+  },
 ]
 
 /**
  * Pick the demo script whose keywords best match the user's product title.
- * Returns the first bundle if nothing matches (so the demo never breaks).
+ *
+ * When `language` is provided we first filter to scripts matching that
+ * language. If nothing matches we fall back to all scripts so the demo never
+ * 404s on an unknown title.
  */
-export function findBestDemoScript(productTitle: string): DemoScript {
+export function findBestDemoScript(
+  productTitle: string,
+  language?: string
+): DemoScript {
   const lower = productTitle.toLowerCase()
-  for (const d of DEMO_SCRIPTS) {
+  const pool = language
+    ? DEMO_SCRIPTS.filter((d) => d.language === language)
+    : DEMO_SCRIPTS
+  const searchPool = pool.length > 0 ? pool : DEMO_SCRIPTS
+
+  for (const d of searchPool) {
     if (d.productKeywords.some((k) => lower.includes(k.toLowerCase()))) {
       return d
     }
   }
-  return DEMO_SCRIPTS[0]
+  return searchPool[0]
 }
