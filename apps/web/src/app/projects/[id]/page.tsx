@@ -10,6 +10,7 @@ import { translate, type Locale } from '@/lib/i18n'
 import { PresenterCard } from './PresenterCard'
 import { ProjectActionPanel } from './ProjectActionPanel'
 import { ScriptEditor } from './ScriptEditor'
+import { VersionList } from './VersionList'
 
 const STATUS_KEY: Record<string, string> = {
   draft: 'status.draft',
@@ -163,34 +164,10 @@ export default async function ProjectDetailPage({
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Versions ({versions.length})</CardTitle>
-                <CardDescription>ทุกครั้งที่ render จะเก็บเวอร์ชันใหม่ (ไม่ทับของเก่า)</CardDescription>
+                <CardDescription>ทุกครั้งที่ render จะเก็บเวอร์ชันใหม่ (ไม่ทับของเก่า) — เลือก checkbox เพื่อลบหลายอัน</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {versions.map((v, i) => {
-                  const m = v.meta ?? {}
-                  const tags = [
-                    m.duration_seconds != null ? `${m.duration_seconds}s` : null,
-                    m.mode === 'ai' ? 'AI lip-sync' : m.mode === 'loop' ? 'loop' : null,
-                    m.voice_clone ? '🎙️clone' : null,
-                    m.playback_speed && m.playback_speed !== 1 ? `${m.playback_speed}x` : null,
-                    m.voice || null,
-                  ].filter(Boolean)
-                  return (
-                    <div key={v.id} className="rounded-md border bg-muted/30 px-3 py-2 text-xs">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium">{i === 0 ? '★ ล่าสุด' : `v${versions.length - i}`}</span>
-                        <span className="text-muted-foreground">{new Date(v.created_at).toLocaleString(LOCALE_TAG[locale])}</span>
-                        <a href={`${v.output_video_url}?t=${v.id.slice(0, 8)}`} target="_blank" rel="noreferrer" className="text-primary hover:underline shrink-0">เปิด ▶</a>
-                      </div>
-                      {tags.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {tags.map((tg, k) => <span key={k} className="rounded bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground border">{tg}</span>)}
-                        </div>
-                      )}
-                      {m.script_text && <p className="mt-1 line-clamp-2 text-[10px] text-muted-foreground">{m.script_text}</p>}
-                    </div>
-                  )
-                })}
+              <CardContent>
+                <VersionList projectId={data.id} versions={versions} />
               </CardContent>
             </Card>
           )}

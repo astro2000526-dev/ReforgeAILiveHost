@@ -26,6 +26,7 @@ class LipSyncRequest(BaseModel):
     return_mode: str = Field(default="path", description="path | url | file")
     max_edge: Optional[int] = Field(default=None, description="long-edge cap (follows requested video_quality)")
     lip_blend: int = Field(default=30, description="0..100 feather the lip-crop edge into the frame (ความเนียน)")
+    model: Optional[str] = Field(default=None, description="wav2lip | musetalk — switch engine at runtime to match Settings")
 
 
 async def _fetch_bytes(url: str) -> bytes:
@@ -52,6 +53,21 @@ async def _resolve(b64: str | None, url: str | None, label: str) -> bytes:
 @router.post("/lip-sync")
 async def lip_sync(req: LipSyncRequest, request: Request, _: None = Depends(require_token)):
     model = request.app.state.model
+    # Runtime engine switch so the Settings dropdown actually takes effect
+    # without a container restart. Single worker → requests are serialized, so
+    # swapping app.state.model here is safe. infer() lazy-loads on first use.
+    want = (req.model or "").strip().lower()
+    if want and want != getattr(model, "name", ""):
+        from ..models import build_model
+        try:
+            new_model = build_model(want)
+            new_model.load()
+            request.app.state.model = new_model
+            model = new_model
+            log.info("lip-sync engine switched to %s", want)
+        except Exception as e:
+            log.exception("engine switch to %s failed; keeping %s", want, getattr(model, "name", "?"))
+            raise HTTPException(400, f"cannot switch engine to {want}: {e}")
     image_bytes = await _resolve(req.avatar_base64, req.avatar_url, "avatar")
     audio_bytes = await _resolve(req.audio_base64, req.audio_url, "audio")
 

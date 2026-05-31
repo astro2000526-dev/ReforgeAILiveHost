@@ -168,15 +168,17 @@ export function ProjectActionPanel({
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="duration">{t('panel.render.duration')}</Label>
+            <Label htmlFor="duration">{t('panel.render.duration')} <span className="text-xs font-normal text-muted-foreground">(0 วินาที – 30 นาที / {Math.floor(duration/60)}:{String(duration%60).padStart(2,'0')})</span></Label>
             <Input
               id="duration"
               type="number"
               inputMode="numeric"
-              min={1}
-              max={3600}
+              min={0}
+              max={1800}
+              step={1}
               value={duration}
-              onChange={(e) => setDuration(Math.max(1, Math.min(Number(e.target.value) || 1, 3600)))}
+              // allow free typing; only cap the ceiling at 30 min (1800s). empty → 0.
+              onChange={(e) => setDuration(Math.min(Math.max(Number(e.target.value) || 0, 0), 1800))}
               disabled={rendering}
             />
           </div>

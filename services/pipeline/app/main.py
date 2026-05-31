@@ -91,6 +91,9 @@ class ScriptRequest(BaseModel):
     price_now: float | None = None
     price_original: float | None = None
     language: str = "th"          # th | en | zh
+    existing_script: str = ""     # current script — improve on it, don't ignore
+    avatar_name: str = ""         # presenter persona (name)
+    avatar_desc: str = ""         # presenter persona (description)
     llm_url: str = _OLLAMA_URL
     model: str = "qwen2.5:3b"
 
@@ -126,17 +129,26 @@ async def llm_endpoint(req: LLMRequest):
 @app.post("/script", dependencies=[Depends(verify_pipeline_token)])
 async def script_endpoint(req: ScriptRequest):
     lang = _LANG_WORD.get(req.language[:2], "ภาษาไทย")
-    info = f"สินค้า: {req.product_title}\n"
+    info = f"สินค้า: {req.product_title or '(ไม่ระบุ)'}\n"
     if req.selling_points:
         info += "จุดขาย: " + ", ".join(req.selling_points) + "\n"
     if req.price_now:
         info += f"ราคา: {req.price_now}" + (f" (ปกติ {req.price_original})" if req.price_original else "") + "\n"
+    # Presenter persona — keep the voice/character consistent with the avatar.
+    if req.avatar_name or req.avatar_desc:
+        info += f"พิธีกร: {req.avatar_name}".rstrip() + (f" — {req.avatar_desc}" if req.avatar_desc else "") + "\n"
+    # Existing script — improve/continue it, don't throw it away.
+    ctx = ""
+    if (req.existing_script or "").strip():
+        ctx = ("\nสคริปต์เดิมที่มีอยู่ (ใช้เป็นบริบท ปรับปรุงให้ดีขึ้น คงโทน/สินค้า/ข้อมูลเดิม "
+               "ไม่ใช่เขียนใหม่หมดแบบไม่เกี่ยว):\n\"\"\"\n" + req.existing_script.strip()[:2000] + "\n\"\"\"\n")
     prompt = (
         f"คุณเป็นนักขายไลฟ์มืออาชีพ เขียนสคริปต์ขายของสด {lang} 6 ช่วงตามลำดับนี้: "
         "เปิดตัว, ปัญหา, แนะนำสินค้า, สาธิต, ราคา, ปิดการขาย. "
         "แต่ละช่วง 1-2 ประโยค กระชับ เป็นธรรมชาติ ชวนซื้อ. "
+        "อ้างอิงข้อมูลสินค้า/พิธีกร/สคริปต์เดิมด้านล่างทั้งหมดเป็นบริบท. "
         "ตอบเป็น 6 บรรทัด บรรทัดละช่วง ขึ้นต้นด้วย [เปิดตัว] [ปัญหา] [แนะนำสินค้า] [สาธิต] [ราคา] [ปิดการขาย] "
-        "ห้ามมีคำอธิบายอื่น.\n\n" + info
+        "ห้ามมีคำอธิบายอื่น.\n\n" + info + ctx
     )
     base = req.llm_url.rstrip("/")
     try:
@@ -254,6 +266,7 @@ class RenderRequest(BaseModel):
     lip_blend: int = 30                      # 0..100 feather lip-crop edge (ความเนียน)
     azure_key: str | None = None             # Azure Speech key (from Settings); overrides env
     azure_region: str | None = None          # Azure region, e.g. eastus
+    lipsync_model: str | None = None         # wav2lip | musetalk — switch engine to match Settings
 
 
 # Live render progress, surfaced on the status panel via GET /render/active.
@@ -701,6 +714,7 @@ async def _render_ai(req: RenderRequest, out_path: Path) -> list[str]:
         "return_mode": "file",
         "max_edge": _lipsync_max_edge(req.video_quality or "1080p"),
         "lip_blend": int(req.lip_blend if req.lip_blend is not None else 30),
+        "model": req.lipsync_model or None,
     }
     base = req.lipsync_url.rstrip("/")
     # MuseTalk reloads its models per request and is much slower than Wav2Lip,

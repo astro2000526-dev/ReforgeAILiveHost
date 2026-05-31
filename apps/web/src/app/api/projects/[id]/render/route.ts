@@ -132,6 +132,7 @@ export async function POST(
       lip_blend: typeof cfg.lip_blend === 'number' ? cfg.lip_blend : 30,
       azure_key: cfg.azure_speech_key || null,
       azure_region: cfg.azure_speech_region || 'eastus',
+      lipsync_model: cfg.lipsync_model || 'wav2lip',
     }),
   })
 
