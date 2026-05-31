@@ -35,6 +35,19 @@ fetch() {
   fi
 }
 
+# Like fetch but WARNS instead of dying — for optional assets where a flaky
+# mirror should degrade (e.g. voice clone) rather than abort the whole deploy.
+fetch_soft() {
+  local url="$1" dest="$2" want="${3:-}"
+  if [ -f "$dest" ] && { [ -z "$want" ] || [ "$(stat -c%s "$dest" 2>/dev/null || echo 0)" = "$want" ]; }; then
+    ok "have $(basename "$dest")"; return 0
+  fi
+  mkdir -p "$(dirname "$dest")"
+  log "↓ $(basename "$dest") (optional)"
+  if curl -fL --retry 3 --retry-delay 2 -C - -o "$dest" "$url" 2>/dev/null; then return 0; fi
+  rm -f "$dest"; return 1
+}
+
 # ── 1. Wav2Lip ──────────────────────────────────────────────────────────────
 W2L="$LS_MODELS/wav2lip"
 if [ ! -d "$W2L/.git" ] && [ ! -f "$W2L/audio.py" ]; then
@@ -52,9 +65,14 @@ if ! fetch "$HF/Kedreamix/Linly-Talker/resolve/main/checkpoints/wav2lip_gan.pth"
         "$W2L/checkpoints/wav2lip_gan.pth" 435801865
 fi
 
-# s3fd face detector (89843225 B).
-fetch "https://www.adrianbulat.com/downloads/python-fan/s3fd-619a316812.pth" \
-      "$W2L/face_detection/detection/sfd/s3fd.pth" 89843225
+# s3fd face detector (89843225 B). adrianbulat is the canonical host but is
+# US-only + flaky; try it then HF mirrors. Soft-fail so a dead CDN doesn't abort
+# the whole deploy — but warn LOUDLY since Wav2Lip needs it.
+S3FD="$W2L/face_detection/detection/sfd/s3fd.pth"
+fetch_soft "https://www.adrianbulat.com/downloads/python-fan/s3fd-619a316812.pth" "$S3FD" 89843225 \
+  || fetch_soft "$HF/Kedreamix/Linly-Talker/resolve/main/checkpoints/s3fd.pth" "$S3FD" \
+  || fetch_soft "$HF/justinjohn0306/Wav2Lip/resolve/main/face_detection/detection/sfd/s3fd.pth" "$S3FD" \
+  || warn "‼ s3fd.pth download FAILED from all mirrors. Wav2Lip won't run until you place it at $S3FD (≈86MB). See README."
 
 # ── 2. MMS-TTS (Thai + English) ─────────────────────────────────────────────
 for lang in tha eng; do
@@ -64,4 +82,17 @@ for lang in tha eng; do
   ok "mms-tts-$lang ready"
 done
 
-ok "models ready (Wav2Lip + MMS-TTS, MuseTalk skipped)"
+# ── 3. OpenVoice tone-color converter (voice clone) ─────────────────────────
+# The openvoice-cli wheel ships NO converter weights and its downloader is
+# hardcoded to huggingface.co. Fetch via the mirror into a mounted dir; the
+# pipeline reads it via OPENVOICE_CONVERTER_DIR. Optional → soft-fail (voice
+# clone degrades to plain TTS if missing).
+OV="$DATA_DIR/pipeline/openvoice/converter"
+if fetch_soft "$HF/myshell-ai/OpenVoice/resolve/main/checkpoints/converter/config.json"   "$OV/config.json" \
+   && fetch_soft "$HF/myshell-ai/OpenVoice/resolve/main/checkpoints/converter/checkpoint.pth" "$OV/checkpoint.pth"; then
+  ok "OpenVoice converter ready"
+else
+  warn "OpenVoice converter download failed — voice clone will fall back to plain TTS until $OV is populated"
+fi
+
+ok "models ready (Wav2Lip + MMS-TTS + OpenVoice; MuseTalk weights via init.sh when enabled)"

@@ -18,3 +18,8 @@ transformers==4.44.2
 # Listed AFTER transformers so the resolver keeps 4.44.2.
 openvoice-cli==0.0.5
 librosa==0.9.1
+# Pin numpy-1 LAST: openvoice-cli/librosa otherwise let pip pull numpy 2.x,
+# which breaks librosa 0.9.1 + the numpy-1-ABI native stack. (Same numpy-1 vs
+# numpy-2 hazard the lipsync image guards against.)
+numpy==1.26.4
+scipy==1.11.4

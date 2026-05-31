@@ -28,7 +28,7 @@ export default function SettingsPage() {
     const t = setTimeout(() => ctrl.abort(), 6000)
     fetch('/api/config', { signal: ctrl.signal })
       .then(r => r.json())
-      .then(d => { setCfg(d.config ?? DEFAULTS) })
+      .then(d => { setCfg({ ...DEFAULTS, ...(d.config ?? {}) }) })  // merge: a legacy/partial row must not leave fields undefined (e.g. playback_speed.toFixed)
       .catch(() => {/* use defaults on timeout */})
       .finally(() => { clearTimeout(t); setLoading(false) })
     return () => { clearTimeout(t); ctrl.abort() }

@@ -76,6 +76,9 @@ services:
       # Azure Neural TTS (best Thai voices). Leave key blank → falls back to MMS.
       AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
       AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-eastus}
+      # OpenVoice converter weights live on a mounted volume (the pip wheel ships
+      # none); download-models.sh populates it.
+      OPENVOICE_CONVERTER_DIR: /workspace/openvoice/converter
       MUSETALK_ENABLED: "0"
       GFPGAN_ENABLED: "0"
       TTS_PROVIDER: mms
@@ -83,6 +86,7 @@ services:
       - ${DATA_DIR}/pipeline/tmp:/workspace/tmp
       - ${DATA_DIR}/pipeline/output:/workspace/output
       - ${DATA_DIR}/pipeline/models:/workspace/MuseTalk/models
+      - ${DATA_DIR}/pipeline/openvoice:/workspace/openvoice
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:

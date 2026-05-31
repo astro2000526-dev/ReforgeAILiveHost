@@ -48,7 +48,7 @@ ok "config ready — HOST_IP=$HOST_IP DATA_DIR=$DATA_DIR"
 
 # ── 2. Data dirs + rendered config files ─────────────────────────────────────
 mkdir -p "$DATA_DIR"/{pgdata,ollama,nginx,status} \
-         "$DATA_DIR"/pipeline/{tmp,output,models} "$DATA_DIR"/pipeline/output/uploads \
+         "$DATA_DIR"/pipeline/{tmp,output,models,openvoice} "$DATA_DIR"/pipeline/output/uploads \
          "$DATA_DIR"/lipsync/{models,runtime}
 export HOST_IP
 envsubst '${HOST_IP}' < "$DEPLOY/nginx/default.conf.template"   > "$DATA_DIR/nginx/default.conf"

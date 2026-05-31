@@ -12,7 +12,10 @@ export type { SystemConfig }
 export { SYSTEM_CONFIG_DEFAULTS }
 
 const CONFIG_KEY = 'system_config_v1'
-const GW = 'http://127.0.0.1:8088/rest/v1'
+// PostgREST gateway base. In the compose deploy the web container reaches it as
+// http://nginx:8088 (via NEXT_PUBLIC_SUPABASE_URL); host-net deploy uses
+// 127.0.0.1:8088. Read from env so it works in both, with a safe fallback.
+const GW = ((process.env.SUPABASE_GATEWAY_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:8088').replace(/\/+$/, '')) + '/rest/v1'
 const SVC_KEY = process.env.SUPABASE_SERVICE_KEY ?? ''
 
 function gwHeaders() {
@@ -26,8 +29,10 @@ async function readConfig(): Promise<SystemConfig> {
       { headers: gwHeaders(), cache: 'no-store', signal: AbortSignal.timeout(4000) }
     )
     if (!r.ok) return SYSTEM_CONFIG_DEFAULTS
-    const rows = (await r.json()) as { value: SystemConfig }[]
-    return rows[0]?.value ?? SYSTEM_CONFIG_DEFAULTS
+    const rows = (await r.json()) as { value: Partial<SystemConfig> }[]
+    // merge over defaults so a row written before newer fields existed never
+    // leaves a field undefined (callers do e.g. cfg.playback_speed.toFixed()).
+    return { ...SYSTEM_CONFIG_DEFAULTS, ...(rows[0]?.value ?? {}) }
   } catch {
     return SYSTEM_CONFIG_DEFAULTS
   }

@@ -30,24 +30,25 @@ RUN pip install --index-url https://download.pytorch.org/whl/cu121 \
 COPY requirements.txt /app/requirements.txt
 RUN pip install -r /app/requirements.txt
 
-# --- MuseTalk runtime deps: use the PREBUILT mmcv 2.1.0 wheel for torch2.1/cu121
-#     (no source compile → fast + ABI-correct). ---
+# --- MuseTalk runtime deps. PREBUILT mmcv 2.1.0 wheel for torch2.1/cu121 (no
+#     source compile → fast + ABI-correct). Split into separate RUNs so no
+#     comment ever sits inside a backslash-continued shell chain.
 RUN pip install -U "setuptools>=70" pip wheel \
     && pip install --no-build-isolation chumpy==0.70 \
     && pip install "mmcv==2.1.0" -f https://download.openmmlab.com/mmcv/dist/cu121/torch2.1/index.html \
-    && pip install --no-deps "mmdet==3.2.0" "mmpose==1.2.0" \
-    # MuseTalk runtime deps pulled by mmdet/mmpose + dwpose (not auto-installed
-    # by --no-deps above): pycocotools/shapely/terminaltables. Required for the
-    # MuseTalk inference subprocess to run.
-    && pip install xtcocotools json_tricks munkres ffmpeg-python moviepy gdown openmim \
-                   pycocotools shapely terminaltables \
-    # mmpose deps drag in scikit-learn→numpy2, which segfaults mmcv's compiled
-    # ops (built for the numpy-1 C ABI). Force the numpy-1 stack back.
-    && pip install "numpy==1.26.4" "scipy==1.11.4" "scikit-learn==1.3.2" \
-    # NOTE: don't import mmcv.ops here — docker build has no GPU, so touching
-    # CUDA ops segfaults at build time. Verify import-only; ops are tested at
-    # runtime (with --gpus). Build succeeding == deps resolved correctly.
-    && python -c "import mmpose,mmdet,mmcv,numpy; print('mm import OK', mmpose.__version__, 'numpy', numpy.__version__)"
+    && pip install --no-deps "mmdet==3.2.0" "mmpose==1.2.0"
+
+# MuseTalk/dwpose runtime deps not pulled by --no-deps above
+# (pycocotools/shapely/terminaltables are needed for the inference subprocess).
+RUN pip install xtcocotools json_tricks munkres ffmpeg-python moviepy gdown openmim \
+                pycocotools shapely terminaltables
+
+# mmpose deps drag in scikit-learn→numpy2, which segfaults mmcv's compiled ops
+# (built for the numpy-1 C ABI). Force the numpy-1 stack back — installed last.
+RUN pip install "numpy==1.26.4" "scipy==1.11.4" "scikit-learn==1.3.2"
+
+# Verify import-only (no GPU at build time → don't touch mmcv.ops here).
+RUN python -c "import mmpose,mmdet,mmcv,numpy; print('mm import OK', mmpose.__version__, 'numpy', numpy.__version__)"
 
 COPY app /app/app
 COPY handler.py /app/handler.py

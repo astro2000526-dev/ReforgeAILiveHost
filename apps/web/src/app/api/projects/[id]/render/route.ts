@@ -33,7 +33,10 @@ type Row = {
   avatar: AvatarJoin | AvatarJoin[] | null
 }
 
-const GW = 'http://127.0.0.1:8088/rest/v1'
+// PostgREST gateway base — env-driven so it resolves to http://nginx:8088 in
+// the compose deploy and 127.0.0.1:8088 on a host-net deploy. (Was hardcoded
+// 127.0.0.1 which is the web container itself in compose → config never loaded.)
+const GW = ((process.env.SUPABASE_GATEWAY_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:8088').replace(/\/+$/, '')) + '/rest/v1'
 const SVC_KEY = process.env.SUPABASE_SERVICE_KEY ?? ''
 
 async function loadConfig(): Promise<SystemConfig> {
