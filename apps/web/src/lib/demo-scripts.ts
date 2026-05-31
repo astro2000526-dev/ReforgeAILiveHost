@@ -27,7 +27,7 @@ export type ScriptSegment = {
 export type DemoScript = {
   productTitle: string
   productKeywords: string[]
-  language: 'zh-CN' | 'th-TH'
+  language: 'zh-CN' | 'th-TH' | 'en-US'
   priceOriginal: number
   priceNow: number
   sellingPoints: string[]
@@ -235,6 +235,86 @@ export const DEMO_SCRIPTS: DemoScript[] = [
         type: 'cta',
         text: 'จำนวนจำกัด เหลือ 80 ชิ้นแล้ว กดตะกร้าสีเหลืองสั่งเลย พลาดวันนี้ราคากลับเป็น 599 ทันที',
         duration_sec: 30,
+      },
+    ],
+  },
+  {
+    productTitle: 'Niacinamide Brightening Serum 30ml',
+    productKeywords: ['serum', 'niacinamide', 'skin', 'brighten', 'beauty', 'glow', 'face'],
+    language: 'en-US',
+    priceOriginal: 39,
+    priceNow: 19,
+    sellingPoints: ['5% niacinamide', 'B5 repair', 'fragrance-free', 'sensitive-skin safe'],
+    segments: [
+      {
+        type: 'intro',
+        text: "Hi everyone, welcome to the live room! Hit that follow button now — we're giving away a free order at the top of the hour!",
+        duration_sec: 30,
+      },
+      {
+        type: 'pain',
+        text: 'Tired skin, uneven tone, dullness after late nights? No foundation seems to cover it and your pores look bigger every day?',
+        duration_sec: 30,
+      },
+      {
+        type: 'product',
+        text: 'Today I have this best-selling niacinamide serum — a generous 30ml bottle, 5% niacinamide plus B5, gentle enough for sensitive skin.',
+        duration_sec: 34,
+      },
+      {
+        type: 'demo',
+        text: 'Look at the texture — lightweight, absorbs in seconds, never sticky. Two weeks in, skin looks visibly brighter and pores look tighter.',
+        duration_sec: 36,
+      },
+      {
+        type: 'price',
+        text: 'Retail is 39 dollars a bottle. Tonight, live-room only: just 19 — and buy one get one free. You will not find this price anywhere else.',
+        duration_sec: 34,
+      },
+      {
+        type: 'cta',
+        text: 'Only 100 units, and over 30 are already gone! Tap the cart below and order now — once they sell out tonight, the price goes back up.',
+        duration_sec: 32,
+      },
+    ],
+  },
+  {
+    productTitle: '4L Air Fryer',
+    productKeywords: ['air fryer', 'fryer', 'kitchen', 'appliance', 'cook', 'gadget'],
+    language: 'en-US',
+    priceOriginal: 99,
+    priceNow: 49,
+    sellingPoints: ['4L capacity', 'viewing window', '90% less oil', 'multi-use'],
+    segments: [
+      {
+        type: 'intro',
+        text: 'Good evening everyone, welcome in! Smash that follow — top of the hour we are drawing for a totally free order!',
+        duration_sec: 30,
+      },
+      {
+        type: 'pain',
+        text: 'Too tired to cook after work? Craving fries and wings but scared of the calories — and tired of greasy pans and pricey takeout?',
+        duration_sec: 32,
+      },
+      {
+        type: 'product',
+        text: 'This 4-litre air fryer has a viewing window so you watch it cook, and oil-free frying cuts up to 90% of the fat. Feeds the whole family.',
+        duration_sec: 36,
+      },
+      {
+        type: 'demo',
+        text: 'Wings in — five minutes, crispy outside, juicy inside, better than fast food. Fries, cake, roast fish too. One machine does it all.',
+        duration_sec: 34,
+      },
+      {
+        type: 'price',
+        text: 'Same models go for 99 and up. Tonight in the live room: 49 dollars flat, plus a free recipe book and tongs. Incredible value.',
+        duration_sec: 32,
+      },
+      {
+        type: 'cta',
+        text: 'Free shipping right now, only 50 units nationwide and 20 are already claimed. Be quick — tap the cart and grab yours before they vanish!',
+        duration_sec: 34,
       },
     ],
   },

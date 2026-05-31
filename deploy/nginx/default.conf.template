@@ -1,0 +1,80 @@
+# Reforge reverse proxy. init.sh runs `envsubst '${HOST_IP}'` on this file and
+# writes the result to ${DATA_DIR}/nginx/default.conf (mounted into nginx).
+#
+# Upstreams are resolved at request time via Docker's embedded DNS (127.0.0.11)
+# + a $var in proxy_pass, so nginx still boots if a backend is briefly down.
+
+resolver 127.0.0.11 valid=10s ipv6=off;
+
+# ── Status page (default vhost) ─────────────────────────────────────────────
+server {
+    listen 80 default_server;
+    server_name status.${HOST_IP}.nip.io _;
+    client_max_body_size 300m;
+    root /usr/share/nginx/html/status;
+    index index.html;
+    location / { try_files $uri $uri/ =404; }
+}
+
+# ── API: pipeline + rendered files + lipsync ────────────────────────────────
+server {
+    listen 80;
+    server_name api.${HOST_IP}.nip.io;
+    client_max_body_size 300m;
+
+    # Rendered/uploaded mp4s straight off disk — fast range requests.
+    location /files/ {
+        alias /srv/files/;
+        add_header Cache-Control "no-cache";
+        add_header Accept-Ranges bytes;
+    }
+
+    location /lipsync/ {
+        set $lipsync http://lipsync:8000;
+        rewrite ^/lipsync/(.*) /$1 break;
+        proxy_pass $lipsync;
+        proxy_read_timeout 120s;
+    }
+
+    location / {
+        set $pipeline http://pipeline:8000;
+        proxy_pass $pipeline;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+}
+
+# ── Console: Next.js web ────────────────────────────────────────────────────
+server {
+    listen 80;
+    server_name console.${HOST_IP}.nip.io;
+    client_max_body_size 300m;
+    location / {
+        set $web http://web:3000;
+        proxy_pass $web;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+}
+
+# ── Internal PostgREST gateway (reached by web as http://nginx:8088) ────────
+server {
+    listen 8088;
+    server_name _;
+    client_max_body_size 50m;
+    location /rest/v1/ {
+        set $rest http://rest:3000;
+        rewrite ^/rest/v1/(.*)$ /$1 break;
+        proxy_pass $rest;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+    }
+    location = /health { return 200 'gw ok\n'; add_header Content-Type text/plain; }
+}

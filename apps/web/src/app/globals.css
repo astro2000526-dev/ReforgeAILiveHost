@@ -49,30 +49,31 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* Luxury light: warm off-white paper, refined ink, deep-indigo accent. */
+  --background: oklch(0.992 0.003 95);
+  --foreground: oklch(0.21 0.01 270);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.21 0.01 270);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.21 0.01 270);
+  --primary: oklch(0.45 0.13 274);
+  --primary-foreground: oklch(0.99 0.005 95);
+  --secondary: oklch(0.965 0.005 95);
+  --secondary-foreground: oklch(0.28 0.02 274);
+  --muted: oklch(0.965 0.005 95);
+  --muted-foreground: oklch(0.52 0.015 270);
+  --accent: oklch(0.95 0.02 274);
+  --accent-foreground: oklch(0.3 0.05 274);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.905 0.006 270);
+  --input: oklch(0.905 0.006 270);
+  --ring: oklch(0.45 0.13 274);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  --radius: 0.85rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -84,24 +85,25 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  /* Luxury dark: deep blue-charcoal, soft ink, luminous indigo accent. */
+  --background: oklch(0.17 0.012 270);
+  --foreground: oklch(0.96 0.005 270);
+  --card: oklch(0.205 0.014 270);
+  --card-foreground: oklch(0.96 0.005 270);
+  --popover: oklch(0.205 0.014 270);
+  --popover-foreground: oklch(0.96 0.005 270);
+  --primary: oklch(0.7 0.13 274);
+  --primary-foreground: oklch(0.17 0.012 270);
+  --secondary: oklch(0.27 0.015 270);
+  --secondary-foreground: oklch(0.96 0.005 270);
+  --muted: oklch(0.27 0.015 270);
+  --muted-foreground: oklch(0.72 0.015 270);
+  --accent: oklch(0.32 0.04 274);
+  --accent-foreground: oklch(0.96 0.005 270);
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 13%);
+  --ring: oklch(0.7 0.13 274);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -126,5 +128,32 @@
   }
   html {
     @apply font-sans;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Premium feel: soft elevation on cards, smooth interactions, refined links. */
+  [data-slot="card"], .lux-card {
+    box-shadow: 0 1px 2px oklch(0.2 0.02 270 / 0.04), 0 4px 16px -8px oklch(0.2 0.02 270 / 0.10);
+    transition: box-shadow .25s ease, transform .25s ease, border-color .25s ease;
+  }
+  .dark [data-slot="card"], .dark .lux-card {
+    box-shadow: 0 1px 2px oklch(0 0 0 / 0.3), 0 8px 24px -12px oklch(0 0 0 / 0.5);
+  }
+  button, a, [data-slot="button"] { transition: all .2s ease; }
+  ::selection { background: oklch(0.45 0.13 274 / 0.22); }
+
+  /* Tame HDR / wide-gamut media so uploaded photos & videos don't blast the
+     screen at night. dynamic-range-limit clamps HDR→SDR on supporting browsers
+     (Chrome 123+); the brightness filter is a gentle fallback everywhere. */
+  img,
+  video {
+    dynamic-range-limit: standard;
+    image-rendering: auto;
+  }
+  /* Slightly soften media only in dark mode (night use). */
+  .dark img,
+  .dark video {
+    filter: brightness(0.92) saturate(0.96);
   }
 }

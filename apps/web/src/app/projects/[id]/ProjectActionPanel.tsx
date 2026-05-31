@@ -7,15 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-
-type GenerationStatus = {
-  status: 'queued' | 'tts' | 'lipsync' | 'concat' | 'transcode' | 'done' | 'failed' | 'unknown'
-  stage?: string
-  progress?: number
-  output_path?: string | null
-  output_url?: string | null
-  message?: string | null
-}
+import { useI18n } from '@/components/LocaleProvider'
 
 type StreamState = {
   stream_id?: string
@@ -23,16 +15,7 @@ type StreamState = {
   message?: string | null
 }
 
-const STAGE_LABEL: Record<string, string> = {
-  queued: '排队中',
-  download: '下载模板',
-  tts: 'TTS 合成',
-  concat_audio: '音频拼接',
-  lipsync: 'MuseTalk 对口型',
-  transcode: '转码',
-  done: '完成',
-  failed: '失败',
-}
+const FB_RTMP = 'rtmps://live-api-s.facebook.com:443/rtmp/'
 
 export function ProjectActionPanel({
   projectId,
@@ -42,62 +25,97 @@ export function ProjectActionPanel({
   initialStatus: string
 }) {
   const router = useRouter()
+  const { t } = useI18n()
 
   const [projectStatus, setProjectStatus] = useState(initialStatus)
-  const [gen, setGen] = useState<GenerationStatus | null>(null)
-  const [genError, setGenError] = useState<string | null>(null)
-  const [starting, setStarting] = useState(false)
 
-  const [rtmpUrl, setRtmpUrl] = useState('')
+  // --- render clip ---
+  const [duration, setDuration] = useState(30)
+  const [defaultRtmpLoaded, setDefaultRtmpLoaded] = useState(false)
+  const [rendering, setRendering] = useState(false)
+  const [renderPct, setRenderPct] = useState(0)
+  const [renderErrors, setRenderErrors] = useState<string[]>([])
+  const [renderSource, setRenderSource] = useState<string | null>(null)
+  const [renderDone, setRenderDone] = useState(false)
+  const [renderFailed, setRenderFailed] = useState<string | null>(null)
+
+  // --- stream ---
+  const [rtmpUrl, setRtmpUrl] = useState(FB_RTMP)
   const [streamKey, setStreamKey] = useState('')
   const [stream, setStream] = useState<StreamState>({ status: 'idle' })
   const [streamBusy, setStreamBusy] = useState(false)
   const [streamError, setStreamError] = useState<string | null>(null)
 
-  // Poll generation status while generating.
+  // Load defaults (clip length, RTMP URL) from system settings.
   useEffect(() => {
-    if (projectStatus !== 'generating') return
-    let cancelled = false
-    const tick = async () => {
-      try {
-        const r = await fetch(`/api/projects/${projectId}/generation-status`, { cache: 'no-store' })
-        if (!r.ok) return
-        const data = (await r.json()) as GenerationStatus
-        if (cancelled) return
-        setGen(data)
-        if (data.status === 'done' || data.status === 'failed') {
-          // Flip local state so the polling effect exits AND the UI swaps
-          // out of the "generating" branch (which would otherwise hide the
-          // error message and keep the spinner up).
-          setProjectStatus(data.status === 'done' ? 'ready' : 'failed')
-          router.refresh()
+    const ctrl = new AbortController()
+    fetch('/api/config', { signal: ctrl.signal })
+      .then((r) => r.json())
+      .then((d) => {
+        const c = d.config ?? {}
+        if (typeof c.default_duration === 'number') setDuration(c.default_duration)
+        if (c.default_rtmp_url && !defaultRtmpLoaded) {
+          setRtmpUrl(c.default_rtmp_url)
+          setDefaultRtmpLoaded(true)
         }
-      } catch {
-        // swallow; we'll try again next tick
-      }
-    }
-    tick()
-    const id = setInterval(tick, 3000)
-    return () => {
-      cancelled = true
-      clearInterval(id)
-    }
-  }, [projectId, projectStatus, router])
+      })
+      .catch(() => {})
+    return () => ctrl.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  async function startGeneration() {
-    setStarting(true)
-    setGenError(null)
-    try {
-      const r = await fetch(`/api/projects/${projectId}/generate`, { method: 'POST' })
-      const data = (await r.json()) as { error?: string }
-      if (!r.ok) throw new Error(data.error ?? `HTTP ${r.status}`)
-      setProjectStatus('generating')
-      setGen({ status: 'queued', progress: 0 })
-    } catch (err) {
-      setGenError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setStarting(false)
+  // Resume progress on page load if a render is already in flight (survives refresh).
+  useEffect(() => {
+    let alive = true
+    fetch(`/api/projects/${projectId}/render-status`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((js) => {
+        if (alive && js && js.status === 'rendering') {
+          setRendering(true)
+          setRenderPct(js.pct ?? 0)
+          pollRender()
+        }
+      })
+      .catch(() => {})
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function pollRender() {
+    for (let i = 0; i < 200; i++) {
+      await new Promise((res) => setTimeout(res, 2500))
+      const s = await fetch(`/api/projects/${projectId}/render-status`, { cache: 'no-store' })
+      if (!s.ok) continue
+      const js = (await s.json()) as { status: string; pct: number; source?: string; output_url?: string; errors?: string[] }
+      setRenderPct(js.pct ?? 0)
+      if (js.status === 'done') {
+        setRenderErrors(js.errors ?? []); setRenderSource(js.source ?? null)
+        setRenderDone(true); setProjectStatus('ready'); setRendering(false); router.refresh(); return
+      }
+      if (js.status === 'failed') { setRenderFailed((js.errors ?? []).join('; ') || 'render failed'); setRendering(false); return }
+      if (js.status === 'cancelled') { setRendering(false); setRenderPct(0); return }
     }
+    setRenderFailed('render timed out'); setRendering(false)
+  }
+
+  async function renderClip() {
+    setRendering(true); setRenderFailed(null); setRenderErrors([]); setRenderDone(false); setRenderPct(0)
+    try {
+      const r = await fetch(`/api/projects/${projectId}/render`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ duration_seconds: duration }),
+      })
+      const data = (await r.json()) as { ok?: boolean; error?: string }
+      if (!r.ok) throw new Error(data.error ?? `HTTP ${r.status}`)
+      await pollRender()
+    } catch (err) {
+      setRenderFailed(err instanceof Error ? err.message : String(err)); setRendering(false)
+    }
+  }
+
+  async function cancelRender() {
+    try { await fetch(`/api/projects/${projectId}/render-cancel`, { method: 'POST' }) } catch {}
+    setRendering(false); setRenderPct(0)
   }
 
   async function startStream() {
@@ -139,72 +157,83 @@ export function ProjectActionPanel({
     }
   }
 
-  const canGenerate = projectStatus === 'draft' || projectStatus === 'failed'
   const canStream = projectStatus === 'ready'
 
   return (
     <>
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">生成视频</CardTitle>
-          <CardDescription>调用 RunPod GPU 上的 MuseTalk + TTS，约 5–10 分钟</CardDescription>
+          <CardTitle className="text-base">{t('panel.render.title')}</CardTitle>
+          <CardDescription>{t('panel.render.desc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {projectStatus === 'generating' && (
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs">
-                <span>{STAGE_LABEL[gen?.stage ?? 'queued'] ?? gen?.stage ?? '处理中'}</span>
-                <span>{gen?.progress ?? 0}%</span>
-              </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="duration">{t('panel.render.duration')}</Label>
+            <Input
+              id="duration"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={3600}
+              value={duration}
+              onChange={(e) => setDuration(Math.max(1, Math.min(Number(e.target.value) || 1, 3600)))}
+              disabled={rendering}
+            />
+          </div>
+
+          {renderFailed && (
+            <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800 break-all">
+              {renderFailed}
+            </div>
+          )}
+
+          {renderErrors.length > 0 && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+              <p className="font-medium">{t('panel.render.warnings')}</p>
+              <ul className="mt-1 list-disc pl-4">
+                {renderErrors.map((e, i) => (
+                  <li key={i} className="break-all">{e}</li>
+                ))}
+              </ul>
+              {/* only say "test pattern" when that's actually what was produced */}
+              {renderSource === 'testpattern' && <p className="mt-1">{t('panel.render.fallback')}</p>}
+            </div>
+          )}
+          {renderDone && renderSource && renderSource !== 'testpattern' && (
+            <p className="text-xs text-muted-foreground">source: {renderSource}</p>
+          )}
+
+          {renderDone && renderErrors.length === 0 && (
+            <p className="text-sm text-emerald-700">{t('panel.render.done')}</p>
+          )}
+
+          {rendering && (
+            <div className="space-y-1">
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full bg-primary transition-all"
-                  style={{ width: `${gen?.progress ?? 0}%` }}
-                />
+                <div className="h-full bg-primary transition-all" style={{ width: `${renderPct}%` }} />
               </div>
+              <p className="text-[11px] text-muted-foreground">{renderPct}%</p>
             </div>
           )}
-
-          {projectStatus === 'failed' && gen?.message && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800">
-              {gen.message}
+          {rendering ? (
+            <div className="flex gap-2">
+              <Button className="flex-1" disabled>{`${t('panel.render.rendering')} ${renderPct}%`}</Button>
+              <Button variant="destructive" onClick={cancelRender}>{t('panel.render.cancel')}</Button>
             </div>
+          ) : (
+            <Button className="w-full" onClick={renderClip}>{t('panel.render.button')}</Button>
           )}
-
-          {genError && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800">
-              {genError}
-            </div>
-          )}
-
-          {projectStatus === 'ready' && (
-            <p className="text-sm text-emerald-700">视频已就绪，去下面开始推流。</p>
-          )}
-
-          <Button
-            className="w-full"
-            disabled={!canGenerate || starting}
-            onClick={startGeneration}
-          >
-            {projectStatus === 'generating'
-              ? '生成中...'
-              : projectStatus === 'ready'
-                ? '重新生成'
-                : starting
-                  ? '提交中...'
-                  : '开始生成'}
-          </Button>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">推流到直播平台</CardTitle>
-          <CardDescription>抖音 / 视频号 / 小红书都支持标准 RTMP</CardDescription>
+          <CardTitle className="text-base">{t('panel.stream.title')}</CardTitle>
+          <CardDescription>{t('panel.stream.desc')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="rtmp-url">RTMP 推流地址</Label>
+            <Label htmlFor="rtmp-url">{t('panel.stream.rtmp')}</Label>
             <Input
               id="rtmp-url"
               placeholder="rtmp://push.example.com/live"
@@ -212,13 +241,14 @@ export function ProjectActionPanel({
               onChange={(e) => setRtmpUrl(e.target.value)}
               disabled={!canStream || stream.status === 'live'}
             />
+            <p className="text-[11px] text-muted-foreground">{t('panel.stream.fbHint')}</p>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="stream-key">推流密钥</Label>
+            <Label htmlFor="stream-key">{t('panel.stream.key')}</Label>
             <Input
               id="stream-key"
               type="password"
-              placeholder="平台分配的 stream key"
+              placeholder={t('panel.stream.keyPh')}
               value={streamKey}
               onChange={(e) => setStreamKey(e.target.value)}
               disabled={!canStream || stream.status === 'live'}
@@ -227,7 +257,7 @@ export function ProjectActionPanel({
 
           {stream.status === 'live' && (
             <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">
-              正在直播中 · stream_id: {stream.stream_id}
+              {t('panel.stream.live')} {stream.stream_id}
             </div>
           )}
           {streamError && (
@@ -237,13 +267,8 @@ export function ProjectActionPanel({
           )}
 
           {stream.status === 'live' ? (
-            <Button
-              className="w-full"
-              variant="destructive"
-              disabled={streamBusy}
-              onClick={stopStream}
-            >
-              {streamBusy ? '停止中...' : '停止推流'}
+            <Button className="w-full" variant="destructive" disabled={streamBusy} onClick={stopStream}>
+              {streamBusy ? t('panel.stream.stopping') : t('panel.stream.stop')}
             </Button>
           ) : (
             <Button
@@ -251,7 +276,7 @@ export function ProjectActionPanel({
               disabled={!canStream || streamBusy || !rtmpUrl.trim() || !streamKey.trim()}
               onClick={startStream}
             >
-              {streamBusy ? '启动中...' : canStream ? '开始推流' : '生成完成后可开播'}
+              {streamBusy ? t('panel.stream.starting') : canStream ? t('panel.stream.start') : t('panel.stream.waitReady')}
             </Button>
           )}
         </CardContent>

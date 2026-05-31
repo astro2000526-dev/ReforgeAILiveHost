@@ -1,0 +1,164 @@
+# ReforgeAILiveHost — full single-server stack.
+# Brought up by init.sh (which generates .env + downloads models first).
+# All services share one network so they reach each other by service name.
+#
+# GPU: pipeline + lipsync + qwen each reserve the GPU; on a single-GPU box they
+# share it (CUDA time-slices). Requires nvidia-container-toolkit on the host.
+
+name: reforge
+
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: 1
+            capabilities: [gpu]
+
+networks:
+  reforge:
+    name: reforge
+
+services:
+  # ── Lean Supabase: Postgres + PostgREST ────────────────────────────────────
+  db:
+    image: postgres:15
+    container_name: reforge-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${SUPERPASS}
+      POSTGRES_DB: postgres
+    volumes:
+      - ${DATA_DIR}/pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [reforge]
+
+  rest:
+    image: postgrest/postgrest:v12.2.3
+    container_name: reforge-rest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${AUTHPASS}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+    networks: [reforge]
+
+  # ── GPU pipeline: TTS (MMS) + voice clone (OpenVoice) + ffmpeg + orchestrate ─
+  pipeline:
+    build:
+      context: ../services/pipeline
+      dockerfile: Dockerfile
+    image: reforge-pipeline:latest
+    container_name: reforge-pipeline
+    restart: unless-stopped
+    environment:
+      PIPELINE_TOKEN: ${PIPELINE_TOKEN}
+      PUBLIC_BASE_URL: http://api.${HOST_IP}.nip.io
+      OLLAMA_URL: http://qwen:11434
+      HF_HOME: /workspace/tmp/hf
+      HF_ENDPOINT: ${HF_MIRROR}
+      MMS_SPEAKING_RATE: "1.0"
+      MUSETALK_ENABLED: "0"
+      GFPGAN_ENABLED: "0"
+      TTS_PROVIDER: mms
+    volumes:
+      - ${DATA_DIR}/pipeline/tmp:/workspace/tmp
+      - ${DATA_DIR}/pipeline/output:/workspace/output
+      - ${DATA_DIR}/pipeline/models:/workspace/MuseTalk/models
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    <<: *gpu
+    networks: [reforge]
+
+  # ── GPU lipsync: Wav2Lip ────────────────────────────────────────────────────
+  lipsync:
+    build:
+      context: ../services/lipsync
+      dockerfile: Dockerfile
+    image: reforge-lipsync:latest
+    container_name: reforge-lipsync
+    restart: unless-stopped
+    environment:
+      MODELS_DIR: /workspace/models
+      WORK_DIR: /workspace/runtime
+      DEVICE: cuda
+      FP16: "true"
+      TARGET_FPS: "25"
+      LIPSYNC_MODEL: wav2lip
+      SAMPLE_RATE: "16000"
+    volumes:
+      - ${DATA_DIR}/lipsync/models:/workspace/models
+      - ${DATA_DIR}/lipsync/runtime:/workspace/runtime
+    ports:
+      - "127.0.0.1:8001:8000"
+    <<: *gpu
+    networks: [reforge]
+
+  # ── Local LLM: Qwen2.5 via ollama (script gen + live auto-reply) ────────────
+  qwen:
+    image: ollama/ollama:latest
+    container_name: reforge-qwen
+    restart: unless-stopped
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+    volumes:
+      - ${DATA_DIR}/ollama:/root/.ollama
+    <<: *gpu
+    networks: [reforge]
+
+  # ── Web (Next.js): UI + API gateway ─────────────────────────────────────────
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile
+    image: reforge-web:latest
+    container_name: reforge-web
+    restart: unless-stopped
+    depends_on:
+      - pipeline
+      - rest
+    environment:
+      NODE_ENV: production
+      PIPELINE_API_URL: http://pipeline:8000
+      PIPELINE_TOKEN: ${PIPELINE_TOKEN}
+      NEXT_PUBLIC_SUPABASE_URL: http://nginx:8088
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_KEY}
+    networks: [reforge]
+
+  # ── Reverse proxy: public :80 vhosts + internal :8088 PostgREST gateway ─────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: reforge-nginx
+    restart: unless-stopped
+    depends_on:
+      - web
+      - pipeline
+      - lipsync
+      - rest
+    ports:
+      - "80:80"
+    volumes:
+      - ${DATA_DIR}/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${DATA_DIR}/pipeline/output:/srv/files:ro
+      - ${DATA_DIR}/status:/usr/share/nginx/html/status:ro
+    networks: [reforge]

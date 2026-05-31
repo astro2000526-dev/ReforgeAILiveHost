@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ReforgeAILiveHost — status</title>
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center;
+      font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(120% 120% at 50% 0%, #1b1d29 0%, #0c0d13 60%); color: #e7e8ee;
+    }
+    .card {
+      width: min(560px, 92vw); padding: 40px; border-radius: 20px;
+      background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08);
+      box-shadow: 0 30px 80px -30px rgba(0,0,0,.7); backdrop-filter: blur(8px);
+    }
+    h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -.02em; }
+    p.sub { margin: 0 0 28px; color: #9aa0b4; font-size: 13px; }
+    a.link {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 18px; margin: 10px 0; border-radius: 14px; text-decoration: none;
+      color: #e7e8ee; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.07);
+      transition: .15s; font-weight: 500;
+    }
+    a.link:hover { background: rgba(99,102,241,.12); border-color: rgba(99,102,241,.5); transform: translateY(-1px); }
+    a.link small { color: #9aa0b4; font-weight: 400; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 10px #22c55e; }
+    footer { margin-top: 24px; color: #6b7080; font-size: 12px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🎙️ ReforgeAILiveHost</h1>
+    <p class="sub">AI digital-human livestream stack — all services running on this host.</p>
+    <a class="link" href="http://console.${HOST_IP}.nip.io"><span>🖥️ Console (web app)</span><span class="dot"></span></a>
+    <a class="link" href="http://api.${HOST_IP}.nip.io/health"><span>⚙️ Pipeline API <small>/health</small></span><span class="dot"></span></a>
+    <a class="link" href="http://api.${HOST_IP}.nip.io/lipsync/health"><span>👄 Lip-sync <small>/lipsync/health</small></span><span class="dot"></span></a>
+    <footer>nip.io wildcard DNS → ${HOST_IP} · open the Console to start</footer>
+  </div>
+</body>
+</html>

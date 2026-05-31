@@ -53,6 +53,12 @@ RUN python -m pip install --upgrade pip \
 COPY requirements.txt /workspace/requirements.txt
 RUN pip install -r /workspace/requirements.txt
 
+# --- Offline TTS (espeak-ng) — works without network/key (edge-tts is geo-blocked in CN) ---
+# Late layer so it doesn't invalidate the heavy MuseTalk/torch cache above.
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends espeak-ng \
+    && rm -rf /var/lib/apt/lists/*
+
 # --- App code ----------------------------------------------------------------
 COPY app /workspace/app
 COPY scripts /workspace/scripts

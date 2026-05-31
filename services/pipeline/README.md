@@ -41,6 +41,18 @@ docker --version
 docker compose version
 ```
 
+**GPU sizing.** MuseTalk v1.5 loads UNet + SD-VAE + Whisper together (~8-10 GB
+VRAM); GFPGAN adds ~2 GB on top. So:
+
+- **≥16 GB VRAM** (T4 / A10 / V100 / 4090 / A100): runs everything, keep
+  `GFPGAN_ENABLED=1` if you want the mouth-edge cleanup.
+- **8 GB cards** (e.g. UCloud "Cost-effective" tiers): tight — set
+  `GFPGAN_ENABLED=0` and expect OOM risk on long clips. Not recommended.
+- **Avoid Pascal (P40/P4)**: no usable fp16, very slow for this inference path.
+
+One GPU is enough — the pipeline runs one MuseTalk job at a time, so multi-GPU
+instances just burn money.
+
 ### 2. Clone + configure
 
 ```bash
@@ -51,27 +63,51 @@ cp .env.example .env
 # Supabase URL + SERVICE_KEY. See .env.example for required keys.
 ```
 
+**Weight-download mirror.** The Dockerfile defaults to `HF_ENDPOINT=https://hf-mirror.com`
+(fast from mainland China). On a host **outside** China (e.g. UCloud SG), the
+mirror is slower than Hugging Face direct — override it in `.env`:
+
+```
+HF_ENDPOINT=https://huggingface.co
+```
+
+(`env_file` in compose overrides the value baked into the image.)
+
 ### 3. Bring it up
 
 ```bash
-docker compose up -d
-docker compose logs -f pipeline    # watch first-boot weight download (~10-15 min)
+docker compose up -d --build      # --build needed the first time
+docker compose logs -f pipeline   # watch image build + first-boot weight download
 ```
 
-The entrypoint downloads ~15 GB of MuseTalk + SD-VAE + Whisper weights into
-`./data/models/` on first boot. Subsequent restarts reuse the volume so they
-take seconds, not minutes.
+**First run is slow — budget ~30-50 min total before the service is healthy:**
+
+| Step | Time |
+|------|------|
+| Image build (clone MuseTalk + pip torch/diffusers ~5 GB) | ~10-20 min |
+| First boot: download ~15 GB weights into `./data/models/` | ~10-30 min |
+
+Subsequent `docker compose up -d` restarts reuse the image + the weight volume,
+so they take seconds. (Drop `--build` after the first build unless code changed.)
+
+> On a short GPU rental, start this immediately after SSH — don't wait. Health
+> won't pass until the weight download finishes (the healthcheck `start_period`
+> is set generously for this reason).
 
 ### 4. Smoke test
 
 ```bash
 # Health (no auth)
 curl http://localhost:8000/health
-# Authenticated request (replace TOKEN with PIPELINE_TOKEN from .env)
+# Authenticated request (replace TOKEN with PIPELINE_TOKEN from .env).
+# Default TTS is Azure → use an Azure neural voice (here: Thai). For Volcengine
+# use a BV* voice instead and set TTS_PROVIDER=volcengine.
 curl -X POST http://localhost:8000/generate \
      -H "Authorization: Bearer ${PIPELINE_TOKEN}" \
      -H "Content-Type: application/json" \
-     -d '{"project_id":"smoke","avatar_template_url":"<url>","script_segments":[{"type":"intro","text":"测试"}],"voice":"BV001_streaming","rate":"+0%"}'
+     -d '{"project_id":"smoke","avatar_template_url":"<url>","script_segments":[{"type":"intro","text":"สวัสดีค่ะ ทดสอบระบบ"}],"voice":"th-TH-PremwadeeNeural","rate":"+0%"}'
+# Poll until status=done or failed:
+curl http://localhost:8000/generate/smoke
 ```
 
 ### 5. Update / redeploy

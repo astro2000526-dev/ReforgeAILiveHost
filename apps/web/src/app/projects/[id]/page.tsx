@@ -4,14 +4,18 @@ import { notFound } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { DEMO_USER_ID } from '@/lib/demo-user'
 import { supabaseAdmin } from '@/lib/supabase-server'
+import { getLocale } from '@/lib/locale-server'
+import { translate, type Locale } from '@/lib/i18n'
 
+import { PresenterCard } from './PresenterCard'
 import { ProjectActionPanel } from './ProjectActionPanel'
+import { ScriptEditor } from './ScriptEditor'
 
-const STATUS_LABEL: Record<string, string> = {
-  draft: '草稿',
-  generating: '生成中',
-  ready: '已就绪',
-  failed: '失败',
+const STATUS_KEY: Record<string, string> = {
+  draft: 'status.draft',
+  generating: 'status.generating',
+  ready: 'status.ready',
+  failed: 'status.failed',
 }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -21,14 +25,7 @@ const STATUS_STYLE: Record<string, string> = {
   failed: 'bg-red-100 text-red-700',
 }
 
-const SEGMENT_LABEL: Record<string, string> = {
-  intro: '开场',
-  pain: '痛点',
-  product: '产品介绍',
-  demo: '演示',
-  price: '价格',
-  cta: '促单',
-}
+const LOCALE_TAG: Record<Locale, string> = { en: 'en-US', zh: 'zh-CN', th: 'th-TH' }
 
 export const dynamic = 'force-dynamic'
 
@@ -62,17 +59,19 @@ type ProjectRow = {
   avatar: AvatarRow | AvatarRow[] | null
 }
 
-async function latestVideoUrl(projectId: string): Promise<string | null> {
+type VMeta = { duration_seconds?: number; mode?: string; voice?: string; voice_clone?: boolean; playback_speed?: number; tts_provider?: string; script_text?: string }
+type Version = { id: string; output_video_url: string | null; created_at: string; meta: VMeta | null }
+
+async function listVersions(projectId: string): Promise<Version[]> {
   const { data } = await supabaseAdmin
     .from('generations')
-    .select('output_video_url')
+    .select('id, output_video_url, created_at, meta')
     .eq('project_id', projectId)
     .eq('status', 'done')
     .not('output_video_url', 'is', null)
     .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  return data?.output_video_url ?? null
+    .limit(50)
+  return (data as Version[]) ?? []
 }
 
 export default async function ProjectDetailPage({
@@ -81,6 +80,8 @@ export default async function ProjectDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
+  const locale = await getLocale()
+  const t = (k: string) => translate(locale, k)
 
   const { data, error } = await supabaseAdmin
     .from('projects')
@@ -99,7 +100,7 @@ export default async function ProjectDetailPage({
     return (
       <main className="mx-auto max-w-4xl px-6 py-12">
         <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-          加载项目失败：{error.message}
+          {t('dash.loadFailed')}{error.message}
         </div>
       </main>
     )
@@ -110,7 +111,9 @@ export default async function ProjectDetailPage({
   const avatar = Array.isArray(data.avatar) ? data.avatar[0] ?? null : data.avatar
   const product = data.product_info ?? {}
   const segments = data.script_segments ?? []
-  const videoUrl = data.status === 'ready' ? await latestVideoUrl(data.id) : null
+  const versions = await listVersions(data.id)
+  const videoUrl = versions[0]?.output_video_url ?? null
+  const estDur = Math.round(segments.reduce((s, x) => s + (x.duration_sec ?? 30), 0))
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-12">
@@ -118,7 +121,7 @@ export default async function ProjectDetailPage({
         href="/dashboard"
         className="text-xs font-mono uppercase tracking-widest text-muted-foreground hover:text-foreground"
       >
-        ← 返回控制台
+        {t('common.back')}
       </Link>
 
       <header className="mt-3 mb-8 flex flex-wrap items-start justify-between gap-3">
@@ -126,7 +129,7 @@ export default async function ProjectDetailPage({
           <h1 className="text-3xl font-semibold tracking-tight">{data.name}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {data.language ?? '—'} · {data.voice ?? '—'} · {data.speech_rate ?? '+0%'} ·{' '}
-            {new Date(data.created_at).toLocaleString('zh-CN')}
+            {new Date(data.created_at).toLocaleString(LOCALE_TAG[locale])}
           </p>
         </div>
         <span
@@ -134,7 +137,7 @@ export default async function ProjectDetailPage({
             STATUS_STYLE[data.status] ?? 'bg-zinc-100 text-zinc-700'
           }`}
         >
-          {STATUS_LABEL[data.status] ?? data.status}
+          {STATUS_KEY[data.status] ? t(STATUS_KEY[data.status]) : data.status}
         </span>
       </header>
 
@@ -143,7 +146,7 @@ export default async function ProjectDetailPage({
           {videoUrl && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">生成的视频</CardTitle>
+                <CardTitle className="text-base">{t('proj.video')}</CardTitle>
                 <CardDescription className="break-all">{videoUrl}</CardDescription>
               </CardHeader>
               <CardContent>
@@ -156,28 +159,64 @@ export default async function ProjectDetailPage({
             </Card>
           )}
 
+          {versions.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Versions ({versions.length})</CardTitle>
+                <CardDescription>ทุกครั้งที่ render จะเก็บเวอร์ชันใหม่ (ไม่ทับของเก่า)</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {versions.map((v, i) => {
+                  const m = v.meta ?? {}
+                  const tags = [
+                    m.duration_seconds != null ? `${m.duration_seconds}s` : null,
+                    m.mode === 'ai' ? 'AI lip-sync' : m.mode === 'loop' ? 'loop' : null,
+                    m.voice_clone ? '🎙️clone' : null,
+                    m.playback_speed && m.playback_speed !== 1 ? `${m.playback_speed}x` : null,
+                    m.voice || null,
+                  ].filter(Boolean)
+                  return (
+                    <div key={v.id} className="rounded-md border bg-muted/30 px-3 py-2 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium">{i === 0 ? '★ ล่าสุด' : `v${versions.length - i}`}</span>
+                        <span className="text-muted-foreground">{new Date(v.created_at).toLocaleString(LOCALE_TAG[locale])}</span>
+                        <a href={`${v.output_video_url}?t=${v.id.slice(0, 8)}`} target="_blank" rel="noreferrer" className="text-primary hover:underline shrink-0">เปิด ▶</a>
+                      </div>
+                      {tags.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {tags.map((tg, k) => <span key={k} className="rounded bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground border">{tg}</span>)}
+                        </div>
+                      )}
+                      {m.script_text && <p className="mt-1 line-clamp-2 text-[10px] text-muted-foreground">{m.script_text}</p>}
+                    </div>
+                  )
+                })}
+              </CardContent>
+            </Card>
+          )}
+
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">商品信息</CardTitle>
+              <CardTitle className="text-base">{t('proj.product')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <div>
-                <span className="text-muted-foreground">标题：</span>
+                <span className="text-muted-foreground">{t('proj.title')} </span>
                 {product.title ?? '—'}
               </div>
               <div className="flex gap-4">
                 <div>
-                  <span className="text-muted-foreground">现价：</span>
+                  <span className="text-muted-foreground">{t('proj.priceNow')} </span>
                   {product.price_now != null ? `¥${product.price_now}` : '—'}
                 </div>
                 <div>
-                  <span className="text-muted-foreground">原价：</span>
+                  <span className="text-muted-foreground">{t('proj.priceOrig')} </span>
                   {product.price_original != null ? `¥${product.price_original}` : '—'}
                 </div>
               </div>
               {product.selling_points && product.selling_points.length > 0 && (
                 <div>
-                  <span className="text-muted-foreground">卖点：</span>
+                  <span className="text-muted-foreground">{t('proj.points')} </span>
                   {product.selling_points.join(' · ')}
                 </div>
               )}
@@ -186,51 +225,17 @@ export default async function ProjectDetailPage({
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">脚本（{segments.length} 段）</CardTitle>
-              <CardDescription>预估时长 ~{Math.round(segments.reduce((s, x) => s + (x.duration_sec ?? 30), 0))} 秒</CardDescription>
+              <CardTitle className="text-base">{t('proj.script')}（{segments.length} {t('proj.segments')}）</CardTitle>
+              <CardDescription>{t('proj.estDur')} ~{estDur} {t('proj.sec')}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {segments.length === 0 ? (
-                <p className="text-sm text-muted-foreground">脚本为空</p>
-              ) : (
-                segments.map((seg, i) => (
-                  <div key={i} className="rounded-md border bg-muted/30 p-3">
-                    <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
-                      <span className="font-medium uppercase tracking-wider">
-                        {SEGMENT_LABEL[seg.type] ?? seg.type}
-                      </span>
-                      {seg.duration_sec && <span>~{Math.round(seg.duration_sec)} 秒</span>}
-                    </div>
-                    <p className="text-sm leading-relaxed">{seg.text}</p>
-                  </div>
-                ))
-              )}
+            <CardContent>
+              <ScriptEditor projectId={data.id} initial={segments} />
             </CardContent>
           </Card>
         </div>
 
         <aside className="space-y-6">
-          {avatar && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">数字人</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {avatar.preview_image_url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={avatar.preview_image_url}
-                    alt={avatar.name ?? ''}
-                    className="mb-3 aspect-[2/3] w-full rounded-md object-cover"
-                  />
-                )}
-                <p className="text-sm font-medium">{avatar.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {avatar.region ?? '?'} · {avatar.gender ?? '?'}
-                </p>
-              </CardContent>
-            </Card>
-          )}
+          <PresenterCard projectId={data.id} current={avatar} />
 
           <ProjectActionPanel
             projectId={data.id}

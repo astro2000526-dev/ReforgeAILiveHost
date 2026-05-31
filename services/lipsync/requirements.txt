@@ -1,0 +1,36 @@
+# Pinned for CUDA 12.1 / PyTorch 2.3 wheels.
+# torch/torchvision/torchaudio are installed in the Dockerfile from the
+# pytorch-cu121 index so they are not listed here.
+
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+python-dotenv==1.0.1
+
+# audio + image
+numpy==1.26.4
+soundfile==0.12.1
+librosa==0.10.2
+imageio==2.35.1
+imageio-ffmpeg==0.5.1
+opencv-python-headless==4.10.0.84
+Pillow==10.4.0
+
+# model deps (MuseTalk + Wav2Lip)
+einops==0.8.0
+omegaconf==2.3.0
+transformers==4.44.2
+accelerate==0.34.2
+diffusers==0.30.3
+gdown==5.2.0
+huggingface-hub==0.25.1
+mediapipe==0.10.14
+face-alignment==1.4.1
+
+# http + ws
+httpx==0.27.2
+websockets==13.0.1
+python-multipart==0.0.9
+
+# RunPod Serverless SDK (used by handler.py)
+runpod>=1.7.0,<2.0.0

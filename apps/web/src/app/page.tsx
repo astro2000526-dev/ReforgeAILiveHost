@@ -1,38 +1,61 @@
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
+import { getLocale } from "@/lib/locale-server";
+import { translate } from "@/lib/i18n";
 
-export default function Home() {
+export default async function Home() {
+  const locale = await getLocale();
+  const t = (k: string) => translate(locale, k);
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-start justify-center gap-8 px-8 py-16">
-      <div className="flex flex-col gap-2">
-        <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-          Reforge AI · MVP
-        </p>
-        <h1 className="text-4xl font-semibold tracking-tight">
-          AI 数字人直播后台
-        </h1>
-        <p className="text-base text-muted-foreground">
-          5 分钟生成一段 AI 数字人带货视频，一键推流到抖音 / 视频号 / 小红书。
-        </p>
-      </div>
+    <div className="relative overflow-hidden">
+      {/* soft gradient backdrop */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60rem_40rem_at_50%_-10%,theme(colors.primary/12%),transparent)]"
+      />
+      <main className="mx-auto flex min-h-[calc(100vh-56px)] max-w-4xl flex-col items-center justify-center gap-10 px-6 py-20 text-center">
+        <div className="flex flex-col items-center gap-5">
+          <span className="inline-flex items-center gap-2 rounded-full border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            {t("app.tag")}
+          </span>
+          <h1 className="bg-gradient-to-b from-foreground to-foreground/60 bg-clip-text text-5xl font-bold tracking-tight text-transparent sm:text-6xl">
+            {t("landing.title")}
+          </h1>
+          <p className="max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+            {t("landing.subtitle")}
+          </p>
+        </div>
 
-      <div className="flex flex-wrap gap-3">
-        <Link href="/dashboard" className={buttonVariants({ size: "lg" })}>
-          进入控制台
-        </Link>
-        <Link
-          href="/projects/new"
-          className={buttonVariants({ variant: "outline", size: "lg" })}
-        >
-          新建项目
-        </Link>
-      </div>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Link href="/dashboard" className={buttonVariants({ size: "lg" })}>
+            {t("landing.enter")}
+          </Link>
+          <Link
+            href="/projects/new"
+            className={buttonVariants({ variant: "outline", size: "lg" })}
+          >
+            {t("landing.new")}
+          </Link>
+        </div>
 
-      <ul className="mt-6 text-sm text-muted-foreground space-y-1 list-disc pl-5">
-        <li>选数字人 · 填商品 · 一键出稿 · 配音生成</li>
-        <li>视频生成完成后直接填 RTMP 推流地址开播</li>
-        <li>MVP demo 模式无需注册，进入控制台即用</li>
-      </ul>
-    </main>
+        <div className="mt-6 grid w-full gap-4 sm:grid-cols-3">
+          {[
+            { icon: "🎭", text: t("landing.b1") },
+            { icon: "📡", text: t("landing.b2") },
+            { icon: "⚡", text: t("landing.b3") },
+          ].map((f, i) => (
+            <div
+              key={i}
+              className="rounded-xl border bg-card/50 p-5 text-left backdrop-blur transition-colors hover:bg-card"
+            >
+              <div className="text-2xl">{f.icon}</div>
+              <p className="mt-2 text-sm text-muted-foreground">{f.text}</p>
+            </div>
+          ))}
+        </div>
+      </main>
+    </div>
   );
 }

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { useI18n } from '@/components/LocaleProvider'
 
 type Avatar = {
   id: string
@@ -23,40 +24,24 @@ type Segment = {
   duration_sec?: number
 }
 
-const SEGMENT_LABEL: Record<string, string> = {
-  intro: '开场',
-  pain: '痛点',
-  product: '产品介绍',
-  demo: '演示',
-  price: '价格',
-  cta: '促单',
-}
-
 const VOICE_OPTIONS = [
-  // 中文（火山引擎）
   { id: 'BV001_streaming', label: '通用女声 · 中文', hint: '稳重清晰，适合大多数品类', lang: 'zh-CN' },
   { id: 'BV700_streaming', label: '灿灿（活泼）· 中文', hint: '亲和有活力，适合美妆/服饰', lang: 'zh-CN' },
   { id: 'BV421_streaming', label: '天才少女 · 多语言', hint: '中文 / 越南语 / 印尼语兼容', lang: 'zh-CN' },
-  // 泰语（Azure 神经语音）— SEA 主打
-  { id: 'th-TH-PremwadeeNeural', label: 'Premwadee（专业女声）· 泰语', hint: '温和专业，适合健康/私护/美妆', lang: 'th-TH' },
-  { id: 'th-TH-NiwatNeural', label: 'Niwat（男声）· 泰语', hint: '中性稳重，适合 3C/家电', lang: 'th-TH' },
+  { id: 'th-TH-PremwadeeNeural', label: 'Premwadee · ไทย (หญิง)', hint: 'Warm & professional — health / beauty', lang: 'th-TH' },
+  { id: 'th-TH-NiwatNeural', label: 'Niwat · ไทย (ชาย)', hint: 'Neutral & steady — 3C / appliances', lang: 'th-TH' },
 ]
 
-// Cheap language detector: Thai uses the U+0E00-U+0E7F range, any character
-// in that range means the user typed Thai product info, so we should pull
-// the Thai script template + suggest the Thai voice.
-function detectLanguage(text: string): 'zh-CN' | 'th-TH' {
-  return /[฀-๿]/.test(text) ? 'th-TH' : 'zh-CN'
+// Script language follows the UI language the user picked in the header.
+const LANG_BY_LOCALE: Record<string, string> = {
+  en: 'en-US',
+  zh: 'zh-CN',
+  th: 'th-TH',
 }
-
-const RATE_OPTIONS = [
-  { id: '-10%', label: '慢' },
-  { id: '+0%', label: '正常' },
-  { id: '+10%', label: '快' },
-]
 
 export default function NewProjectPage() {
   const router = useRouter()
+  const { t, locale } = useI18n()
 
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
   const [avatars, setAvatars] = useState<Avatar[]>([])
@@ -80,11 +65,17 @@ export default function NewProjectPage() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
+  const RATE_OPTIONS = [
+    { id: '-10%', label: t('rate.slow') },
+    { id: '+0%', label: t('rate.normal') },
+    { id: '+10%', label: t('rate.fast') },
+  ]
+
   useEffect(() => {
     let cancelled = false
     fetch('/api/avatars')
       .then(async (r) => {
-        if (!r.ok) throw new Error(`加载数字人失败 (HTTP ${r.status})`)
+        if (!r.ok) throw new Error(`avatars HTTP ${r.status}`)
         return r.json() as Promise<{ avatars: Avatar[] }>
       })
       .then((data) => {
@@ -110,8 +101,7 @@ export default function NewProjectPage() {
         .split(/[\n,，]/)
         .map((s) => s.trim())
         .filter(Boolean)
-      const language = detectLanguage(productTitle + ' ' + sellingPointsText)
-      // Auto-suggest the matching voice: Thai script → Thai voice, else default.
+      const language = LANG_BY_LOCALE[locale] ?? 'en-US'
       if (language === 'th-TH' && voice.startsWith('BV')) {
         setVoice('th-TH-PremwadeeNeural')
       }
@@ -126,10 +116,10 @@ export default function NewProjectPage() {
           language,
         }),
       })
-      if (!r.ok) throw new Error(`脚本生成失败 (HTTP ${r.status})`)
+      if (!r.ok) throw new Error(`script HTTP ${r.status}`)
       const data = (await r.json()) as { script_segments: Segment[] }
       setSegments(data.script_segments)
-      if (!projectName) setProjectName(productTitle || '未命名直播')
+      if (!projectName) setProjectName(productTitle || t('wiz.untitled'))
       setStep(3)
     } catch (err) {
       setScriptError(err instanceof Error ? err.message : String(err))
@@ -146,14 +136,12 @@ export default function NewProjectPage() {
         .split(/[\n,，]/)
         .map((s) => s.trim())
         .filter(Boolean)
-      // Derive language from the selected voice — Thai voice → th-TH, etc.
-      const voiceOption = VOICE_OPTIONS.find((v) => v.id === voice)
-      const language = voiceOption?.lang ?? 'zh-CN'
+      const language = LANG_BY_LOCALE[locale] ?? 'en-US'
       const r = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: projectName.trim() || '未命名直播',
+          name: projectName.trim() || t('wiz.untitled'),
           avatar_id: avatarId,
           language,
           voice,
@@ -168,7 +156,7 @@ export default function NewProjectPage() {
         }),
       })
       const data = (await r.json()) as { project?: { id: string }; error?: string }
-      if (!r.ok || !data.project) throw new Error(data.error ?? `保存失败 (HTTP ${r.status})`)
+      if (!r.ok || !data.project) throw new Error(data.error ?? `HTTP ${r.status}`)
       router.push(`/projects/${data.project.id}`)
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err))
@@ -180,24 +168,24 @@ export default function NewProjectPage() {
     <main className="mx-auto max-w-4xl px-6 py-12">
       <header className="mb-8">
         <Link href="/dashboard" className="text-xs font-mono uppercase tracking-widest text-muted-foreground hover:text-foreground">
-          ← 返回控制台
+          {t('common.back')}
         </Link>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">新建直播项目</h1>
-        <p className="mt-1 text-sm text-muted-foreground">4 步搞定：选人 → 填货 → 出稿 → 配音</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight">{t('wiz.title')}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t('wiz.subtitle')}</p>
       </header>
 
       <Stepper current={step} />
 
       {step === 1 && (
         <section className="mt-8">
-          <h2 className="mb-4 text-lg font-medium">第 1 步 · 选一个数字人</h2>
+          <h2 className="mb-4 text-lg font-medium">{t('wiz.s1.heading')}</h2>
           {avatarsLoading ? (
-            <p className="text-sm text-muted-foreground">加载中...</p>
+            <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
           ) : avatarsError ? (
             <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">{avatarsError}</div>
           ) : avatars.length === 0 ? (
             <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
-              数据库还没有数字人。先在 Supabase 跑 0002_demo_seed.sql。
+              {t('wiz.s1.empty')}
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
@@ -211,7 +199,6 @@ export default function NewProjectPage() {
                   }`}
                 >
                   {a.preview_image_url && (
-                    // placehold.co works fine with regular img tag
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={a.preview_image_url}
@@ -229,7 +216,7 @@ export default function NewProjectPage() {
           )}
           <div className="mt-8 flex justify-end">
             <Button size="lg" disabled={!avatarId} onClick={() => setStep(2)}>
-              下一步
+              {t('common.next')}
             </Button>
           </div>
         </section>
@@ -237,16 +224,14 @@ export default function NewProjectPage() {
 
       {step === 2 && (
         <section className="mt-8 space-y-5">
-          <h2 className="text-lg font-medium">第 2 步 · 填商品信息</h2>
-          <p className="text-sm text-muted-foreground">
-            脚本生成会拿这些信息匹配文案模板。MVP 阶段是预设模板库，不调用 Claude API。
-          </p>
+          <h2 className="text-lg font-medium">{t('wiz.s2.heading')}</h2>
+          <p className="text-sm text-muted-foreground">{t('wiz.s2.note')}</p>
 
           <div className="space-y-2">
-            <Label htmlFor="title">商品标题</Label>
+            <Label htmlFor="title">{t('wiz.s2.title')}</Label>
             <Input
               id="title"
-              placeholder="例如：烟酰胺精华液 30ml"
+              placeholder={t('wiz.s2.titlePh')}
               value={productTitle}
               onChange={(e) => setProductTitle(e.target.value)}
             />
@@ -254,7 +239,7 @@ export default function NewProjectPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="price-now">现价（元）</Label>
+              <Label htmlFor="price-now">{t('wiz.s2.priceNow')}</Label>
               <Input
                 id="price-now"
                 type="number"
@@ -265,7 +250,7 @@ export default function NewProjectPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="price-original">原价（元）</Label>
+              <Label htmlFor="price-original">{t('wiz.s2.priceOrig')}</Label>
               <Input
                 id="price-original"
                 type="number"
@@ -278,10 +263,9 @@ export default function NewProjectPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="selling-points">卖点（每行一条，或用逗号隔开）</Label>
+            <Label htmlFor="selling-points">{t('wiz.s2.points')}</Label>
             <Textarea
               id="selling-points"
-              placeholder={'5% 黄金浓度\nB5 修护\n敏感肌可用'}
               value={sellingPointsText}
               onChange={(e) => setSellingPointsText(e.target.value)}
               rows={4}
@@ -294,10 +278,10 @@ export default function NewProjectPage() {
 
           <div className="flex justify-between">
             <Button variant="ghost" onClick={() => setStep(1)}>
-              ← 上一步
+              {t('common.prev')}
             </Button>
             <Button size="lg" disabled={!productTitle.trim() || scriptLoading} onClick={generateScript}>
-              {scriptLoading ? '生成中...' : '生成脚本 →'}
+              {scriptLoading ? t('wiz.s2.generating') : t('wiz.s2.gen')}
             </Button>
           </div>
         </section>
@@ -305,20 +289,18 @@ export default function NewProjectPage() {
 
       {step === 3 && (
         <section className="mt-8 space-y-5">
-          <h2 className="text-lg font-medium">第 3 步 · 校对脚本</h2>
-          <p className="text-sm text-muted-foreground">
-            6 段直播带货话术，按需要直接改文字。每段约 30 秒，合计 ~3 分钟。
-          </p>
+          <h2 className="text-lg font-medium">{t('wiz.s3.heading')}</h2>
+          <p className="text-sm text-muted-foreground">{t('wiz.s3.note')}</p>
 
           <div className="space-y-3">
             {segments.map((seg, i) => (
               <div key={i} className="rounded-lg border p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    {SEGMENT_LABEL[seg.type] ?? seg.type}
+                    {t(`seg.${seg.type}`)}
                   </span>
                   {seg.duration_sec && (
-                    <span className="text-xs text-muted-foreground">~{Math.round(seg.duration_sec)} 秒</span>
+                    <span className="text-xs text-muted-foreground">~{Math.round(seg.duration_sec)} {t('proj.sec')}</span>
                   )}
                 </div>
                 <Textarea
@@ -336,10 +318,10 @@ export default function NewProjectPage() {
 
           <div className="flex justify-between">
             <Button variant="ghost" onClick={() => setStep(2)}>
-              ← 上一步
+              {t('common.prev')}
             </Button>
             <Button size="lg" onClick={() => setStep(4)}>
-              下一步 →
+              {t('common.next')} →
             </Button>
           </div>
         </section>
@@ -347,20 +329,20 @@ export default function NewProjectPage() {
 
       {step === 4 && (
         <section className="mt-8 space-y-6">
-          <h2 className="text-lg font-medium">第 4 步 · 命名 + 配音</h2>
+          <h2 className="text-lg font-medium">{t('wiz.s4.heading')}</h2>
 
           <div className="space-y-2">
-            <Label htmlFor="project-name">项目名</Label>
+            <Label htmlFor="project-name">{t('wiz.s4.name')}</Label>
             <Input
               id="project-name"
-              placeholder="例如：5.20 烟酰胺直播"
+              placeholder={t('wiz.s4.namePh')}
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
             />
           </div>
 
           <div className="space-y-2">
-            <Label>声音</Label>
+            <Label>{t('wiz.s4.voice')}</Label>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
               {VOICE_OPTIONS.map((v) => (
                 <button
@@ -379,7 +361,7 @@ export default function NewProjectPage() {
           </div>
 
           <div className="space-y-2">
-            <Label>语速</Label>
+            <Label>{t('wiz.s4.rate')}</Label>
             <div className="flex gap-2">
               {RATE_OPTIONS.map((r) => (
                 <button
@@ -402,10 +384,10 @@ export default function NewProjectPage() {
 
           <div className="flex justify-between">
             <Button variant="ghost" onClick={() => setStep(3)} disabled={saving}>
-              ← 上一步
+              {t('common.prev')}
             </Button>
             <Button size="lg" onClick={saveProject} disabled={saving || !projectName.trim()}>
-              {saving ? '保存中...' : '保存并进入项目'}
+              {saving ? t('wiz.s4.saving') : t('wiz.s4.save')}
             </Button>
           </div>
         </section>
@@ -415,9 +397,10 @@ export default function NewProjectPage() {
 }
 
 function Stepper({ current }: { current: 1 | 2 | 3 | 4 }) {
-  const steps = ['选数字人', '填商品', '校对脚本', '命名配音']
+  const { t } = useI18n()
+  const steps = [t('wiz.step1'), t('wiz.step2'), t('wiz.step3'), t('wiz.step4')]
   return (
-    <ol className="flex items-center gap-2 text-xs">
+    <ol className="flex flex-wrap items-center gap-2 text-xs">
       {steps.map((label, i) => {
         const n = (i + 1) as 1 | 2 | 3 | 4
         const active = n === current

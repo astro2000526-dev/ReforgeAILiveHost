@@ -13,7 +13,12 @@ cd /workspace
 
 WEIGHT_SENTINEL="MuseTalk/models/musetalkV15/unet.pth"
 
-if [ ! -f "$WEIGHT_SENTINEL" ]; then
+# MuseTalk is OFF in this deploy — lip-sync runs on the separate Wav2Lip
+# service. TTS (MMS) + voice clone (OpenVoice) need NO MuseTalk weights, so we
+# skip the ~6GB download entirely. Set MUSETALK_ENABLED=1 to re-enable it.
+if [ "${MUSETALK_ENABLED:-0}" != "1" ]; then
+    echo "[entrypoint] MUSETALK_ENABLED=0 — skipping MuseTalk weight download (~6GB)."
+elif [ ! -f "$WEIGHT_SENTINEL" ]; then
     echo "[entrypoint] weights missing at $WEIGHT_SENTINEL — downloading..."
     echo "[entrypoint] HF endpoint: ${HF_ENDPOINT:-default}"
     pushd MuseTalk >/dev/null
