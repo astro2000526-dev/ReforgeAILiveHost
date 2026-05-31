@@ -67,6 +67,16 @@ log "building images (pipeline + lipsync + web) — this is the long part…"
 log "waiting for model downloads to finish…"
 if wait "$DL_PID"; then ok "models downloaded"; else die "model download failed — see $DATA_DIR/models-download.log"; fi
 
+# MuseTalk (opt-in): needs a separate ~6GB weight set. Fetched via the built
+# lipsync image's own downloader (uses HF snapshot_download + the mirror).
+if [ "${LIPSYNC_MODEL:-wav2lip}" = "musetalk" ]; then
+  log "LIPSYNC_MODEL=musetalk → downloading MuseTalk weights (~6GB, first run only)…"
+  "${DC[@]}" run --rm --no-deps -e SKIP_WAV2LIP=1 -e HF_ENDPOINT="$HF_MIRROR" \
+    lipsync bash /app/scripts/download_models.sh \
+    && ok "MuseTalk weights ready" \
+    || warn "MuseTalk weight download had issues — check, then re-run; falls back to wav2lip otherwise"
+fi
+
 # ── 4. Database: up (wait healthy) → bootstrap → migrate → seed ──────────────
 # Start ONLY db here and block on its healthcheck via compose's own --wait
 # (stable across compose v2; no fragile `ps --format` template parsing).

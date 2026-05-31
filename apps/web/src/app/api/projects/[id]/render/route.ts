@@ -130,6 +130,8 @@ export async function POST(
       video_quality: cfg.video_quality ?? '1080p',
       sound_mode: cfg.sound_mode ?? 'normal',
       lip_blend: typeof cfg.lip_blend === 'number' ? cfg.lip_blend : 30,
+      azure_key: cfg.azure_speech_key || null,
+      azure_region: cfg.azure_speech_region || 'eastus',
     }),
   })
 

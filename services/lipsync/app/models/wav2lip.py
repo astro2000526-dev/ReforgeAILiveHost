@@ -167,8 +167,9 @@ class Wav2LipModel(LipSyncModel):
                 img = cv2.resize(img, (int(w * s), int(h * s)))
             frames = [np.ascontiguousarray(img)]
 
-        # Detect a face bbox per frame; reuse last good bbox if a frame misses.
-        entries = []
+        # Pass 1: detect a raw face bbox per frame (reuse last good on a miss).
+        kept_frames = []
+        raw_boxes = []
         last = None
         for fr in frames:
             fr = np.ascontiguousarray(fr[:, :, :3])
@@ -177,10 +178,29 @@ class Wav2LipModel(LipSyncModel):
             if box is None:
                 continue
             last = box
-            x1, y1, x2, y2 = [int(v) for v in box]
-            # Clamp bbox to frame bounds — the detector can return coords a few
-            # px outside the frame (esp. on Full-HD), which makes the numpy
-            # slice narrower than cv2.resize's target → "could not broadcast".
+            kept_frames.append(fr)
+            raw_boxes.append([float(v) for v in box])
+        if not raw_boxes:
+            raise RuntimeError("No face detected in avatar image/video")
+
+        # Pass 2: temporally smooth the bbox sequence (upstream Wav2Lip does this
+        # with a 5-frame moving average). Per-frame s3fd detection jitters a few
+        # px each frame; that jitter makes the pasted mouth wobble → unnatural.
+        # Averaging the box over a short window stabilises mouth position so the
+        # lips read as "attached" and move smoothly.
+        boxes = np.asarray(raw_boxes, dtype=np.float32)
+        T = min(5, len(boxes))
+        if T > 1:
+            smoothed = boxes.copy()
+            for i in range(len(boxes)):
+                lo = i if i + T <= len(boxes) else len(boxes) - T
+                smoothed[i] = boxes[lo:lo + T].mean(axis=0)
+            boxes = smoothed
+
+        # Pass 3: clamp to frame bounds + crop the (now stable) face region.
+        entries = []
+        for fr, box in zip(kept_frames, boxes):
+            x1, y1, x2, y2 = (int(round(v)) for v in box)
             h, w = fr.shape[:2]
             x1 = max(0, min(x1, w - 1)); y1 = max(0, min(y1, h - 1))
             x2 = max(x1 + 1, min(x2, w)); y2 = max(y1 + 1, min(y2, h))

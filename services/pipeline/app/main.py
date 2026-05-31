@@ -7,9 +7,12 @@ from pathlib import Path
 
 # Load .env BEFORE anything that reads env vars (TTS provider selection,
 # Supabase client, etc.) — uvicorn doesn't do this automatically.
+# override=True so a value written to /workspace/.env wins over a blank/stale
+# container -e var (e.g. AZURE_SPEECH_KEY="" baked at `docker run`). In the
+# compose deploy there's no .env file, so container env is used as-is.
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
 
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, UploadFile, status
@@ -249,6 +252,8 @@ class RenderRequest(BaseModel):
     video_quality: str = "1080p"             # 1080p | 720p | 480p
     sound_mode: str = "normal"               # soft | normal | boost
     lip_blend: int = 30                      # 0..100 feather lip-crop edge (ความเนียน)
+    azure_key: str | None = None             # Azure Speech key (from Settings); overrides env
+    azure_region: str | None = None          # Azure region, e.g. eastus
 
 
 # Live render progress, surfaced on the status panel via GET /render/active.
@@ -571,19 +576,43 @@ async def _extract_ref_audio(video_url: str, out_wav: Path, seconds: int = 10) -
         return False
 
 
-async def _tts_to_file(text: str, voice: str, rate: str, out_path: Path) -> None:
+async def _tts_azure(text: str, voice: str, rate: str, out_path: Path,
+                     azure_key: str | None = None, azure_region: str | None = None) -> None:
+    """Azure Neural TTS (REST) — best Thai voices (Premwadee/Niwat), reads
+    embedded English too. Key/region come from Settings (per-request) or env."""
+    from .tts.azure import AzureTTSProvider
+    # explicit args win; AzureTTSProvider falls back to env when given None.
+    prov = AzureTTSProvider(speech_key=(azure_key or None), region=(azure_region or None))
+    # Azure needs a full neural voice name (xx-XX-NameNeural); fall back to a
+    # sane Thai voice if we were handed an MMS-style id.
+    az_voice = voice if (voice and voice.count("-") >= 2 and voice.endswith("Neural")) else "th-TH-PremwadeeNeural"
+    await prov.synthesize(text, az_voice, rate, out_path)
+    if not out_path.exists() or out_path.stat().st_size == 0:
+        raise RuntimeError("azure TTS produced empty audio")
+
+
+async def _tts_to_file(text: str, voice: str, rate: str, out_path: Path,
+                       azure_key: str | None = None, azure_region: str | None = None) -> None:
     """TTS chain, China-safe:
-      1. MMS-TTS (Meta, offline neural — real Thai)  ← primary
-      2. edge-tts (best quality, but 403 in China)
+      0. Azure Neural (best quality)                  ← when an Azure key is set
+      1. MMS-TTS (Meta, offline neural — real Thai)   ← offline primary
+      2. edge-tts (good, but 403 in China)
       3. espeak-ng (robotic, last resort)
-    Always writes audio to out_path or raises if all fail.
-    When EDGE_TTS_PROXY is set, prefer edge-tts (much better Thai voice)."""
+    Always writes audio to out_path or raises if all fail."""
+    has_azure = bool((azure_key or os.getenv("AZURE_SPEECH_KEY") or "").strip())
     has_proxy = bool((os.getenv("EDGE_TTS_PROXY") or "").strip())
-    order = ["edge", "mms", "espeak"] if has_proxy else ["mms", "edge", "espeak"]
+    if has_azure:
+        order = ["azure", "mms", "espeak"]
+    elif has_proxy:
+        order = ["edge", "mms", "espeak"]
+    else:
+        order = ["mms", "edge", "espeak"]
     last_err: Exception | None = None
     for engine in order:
         try:
-            if engine == "edge":
+            if engine == "azure":
+                await _tts_azure(text, voice, rate, out_path, azure_key, azure_region)
+            elif engine == "edge":
                 await _tts_edge(text, voice, rate, out_path)
             elif engine == "mms":
                 await _tts_mms(text, voice, out_path)
@@ -616,7 +645,8 @@ async def _render_ai(req: RenderRequest, out_path: Path) -> list[str]:
     # 1) TTS → audio, then trim to the requested duration so we don't lip-sync
     #    a 3-minute script into a huge frame array (mock OOMs, musetalk slow).
     raw_audio = OUTPUT_DIR / f".{pid}.tts.raw"
-    await _tts_to_file(req.script_text.strip(), req.voice, req.rate, raw_audio)
+    await _tts_to_file(req.script_text.strip(), req.voice, req.rate, raw_audio,
+                       azure_key=req.azure_key, azure_region=req.azure_region)
     audio_path = OUTPUT_DIR / f".{pid}.tts.wav"
     dur_cap = max(1, min(int(req.duration_seconds or 15), 1800))  # AI clips: cap 30 min
     trim = await asyncio.to_thread(
@@ -673,7 +703,10 @@ async def _render_ai(req: RenderRequest, out_path: Path) -> list[str]:
         "lip_blend": int(req.lip_blend if req.lip_blend is not None else 30),
     }
     base = req.lipsync_url.rstrip("/")
-    async with httpx.AsyncClient(timeout=600) as c:
+    # MuseTalk reloads its models per request and is much slower than Wav2Lip,
+    # so allow a longer wait via env (default 900s; bump for musetalk).
+    _ls_timeout = float(os.getenv("LIPSYNC_HTTP_TIMEOUT", "900"))
+    async with httpx.AsyncClient(timeout=_ls_timeout) as c:
         r = await c.post(f"{base}/lip-sync", json=payload)
         if r.status_code >= 400:
             raise RuntimeError(f"lipsync HTTP {r.status_code}: {r.text[:200]}")

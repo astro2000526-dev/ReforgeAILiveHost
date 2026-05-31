@@ -67,9 +67,15 @@ services:
       PIPELINE_TOKEN: ${PIPELINE_TOKEN}
       PUBLIC_BASE_URL: http://api.${HOST_IP}.nip.io
       OLLAMA_URL: http://qwen:11434
+      # How long the pipeline waits on the lip-sync service. MuseTalk is slow
+      # (reloads models per call) — give it headroom; Wav2Lip finishes in secs.
+      LIPSYNC_HTTP_TIMEOUT: "1800"
       HF_HOME: /workspace/tmp/hf
       HF_ENDPOINT: ${HF_MIRROR}
       MMS_SPEAKING_RATE: "1.0"
+      # Azure Neural TTS (best Thai voices). Leave key blank → falls back to MMS.
+      AZURE_SPEECH_KEY: ${AZURE_SPEECH_KEY:-}
+      AZURE_SPEECH_REGION: ${AZURE_SPEECH_REGION:-eastus}
       MUSETALK_ENABLED: "0"
       GFPGAN_ENABLED: "0"
       TTS_PROVIDER: mms
@@ -102,8 +108,13 @@ services:
       DEVICE: cuda
       FP16: "true"
       TARGET_FPS: "25"
-      LIPSYNC_MODEL: wav2lip
+      # wav2lip (default, fast) | musetalk (higher quality but heavy + slow;
+      # needs the 6GB weight set — init.sh downloads it when set to musetalk).
+      LIPSYNC_MODEL: ${LIPSYNC_MODEL:-wav2lip}
       SAMPLE_RATE: "16000"
+      # Disable TorchScript: torch 2.1.1's torch.jit.script segfaults while
+      # mmengine imports (needed for MuseTalk's dwpose). Harmless for Wav2Lip.
+      PYTORCH_JIT: "0"
     volumes:
       - ${DATA_DIR}/lipsync/models:/workspace/models
       - ${DATA_DIR}/lipsync/runtime:/workspace/runtime
@@ -129,6 +140,12 @@ services:
     build:
       context: ../apps/web
       dockerfile: Dockerfile
+      # NEXT_PUBLIC_* are inlined at BUILD time by Next.js (not read at runtime),
+      # so they MUST be passed here. They're server-internal URLs, harmless in
+      # the client bundle (the browser talks to /api/*, never these directly).
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: http://nginx:8088
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
     image: reforge-web:latest
     container_name: reforge-web
     restart: unless-stopped

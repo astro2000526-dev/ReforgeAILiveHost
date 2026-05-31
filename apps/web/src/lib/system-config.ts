@@ -12,6 +12,8 @@ export type SystemConfig = {
   video_quality: '1080p' | '720p' | '480p'
   sound_mode: 'normal' | 'boost' | 'soft'
   lip_blend: number          // 0..100 — feather the lip-sync crop edge (ความเนียน)
+  azure_speech_key: string   // Azure Speech key (blank = use offline MMS-TTS)
+  azure_speech_region: string
   default_rtmp_url: string
   default_duration: number
 }
@@ -28,6 +30,8 @@ export const SYSTEM_CONFIG_DEFAULTS: SystemConfig = {
   video_quality: '1080p',
   sound_mode: 'normal',
   lip_blend: 30,
+  azure_speech_key: '',
+  azure_speech_region: 'eastus',
   default_rtmp_url: 'rtmps://live-api-s.facebook.com:443/rtmp/',
   default_duration: 30,
 }

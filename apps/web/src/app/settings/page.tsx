@@ -107,14 +107,54 @@ export default function SettingsPage() {
               <p className="text-xs text-emerald-700">✓ No API key required</p>
             </div>
           )}
-          {cfg.tts_provider !== 'edge-tts' && (
-            <p className="text-xs text-amber-600">Requires API key — set in pipeline .env on the server.</p>
+          {cfg.tts_provider === 'azure' && (
+            <div className="space-y-3 rounded-md border border-border/70 bg-muted/30 p-3">
+              <div className="space-y-1.5">
+                <Label>Azure Speech Key</Label>
+                <Input type="password" autoComplete="off" placeholder="วาง Key 1 จาก Azure portal"
+                  value={cfg.azure_speech_key ?? ''}
+                  onChange={e => setCfg(p => ({ ...p, azure_speech_key: e.target.value.trim() }))} />
+                <p className="text-xs text-muted-foreground">portal.azure.com → Speech resource → Keys and Endpoint</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <Label>Region</Label>
+                  <Input placeholder="eastus" value={cfg.azure_speech_region ?? 'eastus'}
+                    onChange={e => setCfg(p => ({ ...p, azure_speech_region: e.target.value.trim() }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Voice</Label>
+                  <select value={cfg.tts_voice} onChange={e => setCfg(p => ({ ...p, tts_voice: e.target.value }))}
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+                    <option value="th-TH-PremwadeeNeural">หญิง — Premwadee</option>
+                    <option value="th-TH-NiwatNeural">ชาย — Niwat</option>
+                  </select>
+                </div>
+              </div>
+              <p className="text-xs text-emerald-700">{cfg.azure_speech_key ? '✓ Key ตั้งแล้ว — เสียง Azure Neural คุณภาพสูง' : 'ยังไม่ใส่ key → จะ fallback เป็น MMS (offline)'}</p>
+            </div>
           )}
-          <label className="flex items-center gap-2 text-sm cursor-pointer pt-2 border-t">
-            <input type="checkbox" className="h-4 w-4" checked={cfg.voice_clone}
-              onChange={(e) => setCfg(p => ({ ...p, voice_clone: e.target.checked }))} />
-            🎙️ Voice clone — match the avatar&apos;s own voice (OpenVoice, from the avatar video)
-          </label>
+          {cfg.tts_provider === 'volcengine' && (
+            <p className="text-xs text-amber-600">Volcengine requires API key — set in pipeline .env on the server.</p>
+          )}
+          <div className="space-y-2 pt-3 border-t">
+            <Label>โทนเสียงที่ใช้</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setCfg(p => ({ ...p, voice_clone: false }))}
+                className={`rounded-md border px-3 py-2 text-sm text-left transition-colors ${!cfg.voice_clone ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'}`}>
+                🎤 เสียง Original<br /><span className="text-xs text-muted-foreground">ใช้เสียง TTS (Azure/MMS) ตรงๆ</span>
+              </button>
+              <button type="button" onClick={() => setCfg(p => ({ ...p, voice_clone: true }))}
+                className={`rounded-md border px-3 py-2 text-sm text-left transition-colors ${cfg.voice_clone ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'}`}>
+                🧬 Clone เสียง<br /><span className="text-xs text-muted-foreground">แปลงให้เหมือนคนในคลิปต้นฉบับ (OpenVoice)</span>
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {cfg.voice_clone
+                ? 'OpenVoice แปลงโทนเสียงที่ gen ให้เหมือนเสียงในวิดีโอ avatar'
+                : 'ใช้เสียงต้นฉบับที่ gen มา — เร็วกว่า + ได้คุณภาพ TTS เต็มๆ'}
+            </p>
+          </div>
         </section>
 
         {/* ── Lip-sync service ─────────────────────────────────────────── */}
