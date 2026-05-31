@@ -1,0 +1,9 @@
+# /etc/systemd/system/reforge-status.service
+[Unit]
+Description=Reforge status page generator
+After=network.target
+[Service]
+ExecStart=/bin/bash -c 'while true; do /usr/local/bin/genstatus.sh; sleep 5; done'
+Restart=always
+[Install]
+WantedBy=multi-user.target
