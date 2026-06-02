@@ -116,12 +116,29 @@ export default async function DashboardPage() {
 function EmptyState({ locale }: { locale: Locale }) {
   const t = (k: string) => translate(locale, k)
   return (
-    <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50/50 p-12 text-center">
-      <h2 className="text-lg font-medium">{t('dash.empty.title')}</h2>
-      <p className="mt-2 text-sm text-muted-foreground">{t('dash.empty.subtitle')}</p>
+    <div className="flex flex-col items-center rounded-xl border border-dashed border-border bg-card/40 px-6 py-16 text-center shadow-sm">
+      <div className="flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-primary/20">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="26"
+          height="26"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5" />
+          <rect x="2" y="6" width="14" height="12" rx="2" />
+        </svg>
+      </div>
+      <h2 className="mt-5 text-xl font-semibold tracking-tight">{t('dash.empty.title')}</h2>
+      <p className="mt-2 max-w-sm text-sm text-muted-foreground">{t('dash.empty.subtitle')}</p>
       <Link
         href="/projects/new"
-        className={`${buttonVariants({ size: 'lg' })} mt-6`}
+        className={`${buttonVariants({ size: 'lg' })} mt-7`}
       >
         {t('dash.new')}
       </Link>
