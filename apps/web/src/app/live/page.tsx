@@ -45,6 +45,9 @@ export default function LivePage() {
       <Link href="/dashboard" className="text-xs font-mono uppercase tracking-widest text-muted-foreground hover:text-foreground">{t('common.back')}</Link>
       <h1 className="mt-2 text-3xl font-semibold tracking-tight">{t('live.title')}</h1>
       <p className="mt-1 text-sm text-muted-foreground">{t('live.sub')}</p>
+      <Link href="/live/fb-test" className="mt-2 inline-block text-xs text-primary hover:underline">
+        → ทดสอบอ่านคอมเมนต์ Facebook Live (auto-reply)
+      </Link>
 
       <div className="lux-card mt-6 space-y-4 rounded-2xl border bg-card p-5">
         <Input placeholder={t('live.product')} value={product} onChange={(e) => setProduct(e.target.value)} />

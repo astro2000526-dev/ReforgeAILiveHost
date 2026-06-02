@@ -63,21 +63,21 @@ export default function SettingsPage() {
     <main className="mx-auto max-w-2xl px-6 py-12">
       <header className="mb-8">
         <Link href="/dashboard" className="text-xs font-mono uppercase tracking-widest text-muted-foreground hover:text-foreground">{t('common.back')}</Link>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">System Settings</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Configure TTS, lip-sync, render mode, and streaming defaults.</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight">{t('set.title')}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t('set.subtitle')}</p>
       </header>
 
       <div className="space-y-8">
         {/* ── Render Mode ─────────────────────────────────────────────── */}
         <section className="rounded-lg border p-5 space-y-4">
-          <h2 className="font-semibold">Render Mode</h2>
+          <h2 className="font-semibold">{t('set.render.title')}</h2>
           <div className="grid grid-cols-2 gap-3">
             {(['loop', 'ai'] as const).map(m => (
               <button key={m} type="button" onClick={() => setCfg(p => ({ ...p, render_mode: m }))}
                 className={`rounded-lg border p-3 text-left transition-colors hover:bg-muted/40 ${cfg.render_mode === m ? 'border-primary ring-2 ring-primary/30' : 'border-border'}`}>
-                <p className="text-sm font-medium">{m === 'loop' ? '🔁 Loop template' : '🤖 AI lip-sync'}</p>
+                <p className="text-sm font-medium">{m === 'loop' ? t('set.render.loop') : t('set.render.ai')}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {m === 'loop' ? 'ffmpeg loops avatar video · no GPU · fast · ready now' : 'edge-tts + MuseTalk lip-sync · needs GPU weights'}
+                  {m === 'loop' ? t('set.render.loopDesc') : t('set.render.aiDesc')}
                 </p>
               </button>
             ))}
@@ -86,85 +86,110 @@ export default function SettingsPage() {
 
         {/* ── TTS ─────────────────────────────────────────────────────── */}
         <section className="rounded-lg border p-5 space-y-4">
-          <h2 className="font-semibold">Text-to-Speech (TTS)</h2>
+          <h2 className="font-semibold">{t('set.tts.title')}</h2>
           <div className="grid grid-cols-3 gap-2">
             {(['edge-tts', 'azure', 'volcengine'] as const).map(p => (
               <button key={p} type="button" onClick={() => setCfg(c => ({ ...c, tts_provider: p }))}
                 className={`rounded-md border px-3 py-2 text-xs font-medium transition-colors ${cfg.tts_provider === p ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'}`}>
-                {p === 'edge-tts' ? '🆓 edge-tts (free)' : p === 'azure' ? '☁️ Azure Neural' : '🌐 Volcengine'}
+                {p === 'edge-tts' ? t('set.tts.edge') : p === 'azure' ? t('set.tts.azure') : t('set.tts.volc')}
               </button>
             ))}
           </div>
           {cfg.tts_provider === 'edge-tts' && (
             <div className="space-y-2">
-              <Label>Voice</Label>
+              <Label>{t('set.common.voice')}</Label>
               <select value={cfg.tts_voice} onChange={e => setCfg(p => ({ ...p, tts_voice: e.target.value }))}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
                 <optgroup label="Thai">{TH_VOICES.map(v => <option key={v} value={v}>{v}</option>)}</optgroup>
                 <optgroup label="Chinese">{ZH_VOICES.map(v => <option key={v} value={v}>{v}</option>)}</optgroup>
                 <optgroup label="English">{EN_VOICES.map(v => <option key={v} value={v}>{v}</option>)}</optgroup>
               </select>
-              <p className="text-xs text-emerald-700">✓ No API key required</p>
+              <p className="text-xs text-emerald-700">{t('set.tts.noKey')}</p>
             </div>
           )}
           {cfg.tts_provider === 'azure' && (
             <div className="space-y-3 rounded-md border border-border/70 bg-muted/30 p-3">
               <div className="space-y-1.5">
-                <Label>Azure Speech Key</Label>
-                <Input type="password" autoComplete="off" placeholder="วาง Key 1 จาก Azure portal"
+                <Label>{t('set.tts.azureKey')}</Label>
+                <Input type="password" autoComplete="off" placeholder={t('set.tts.azureKeyPh')}
                   value={cfg.azure_speech_key ?? ''}
                   onChange={e => setCfg(p => ({ ...p, azure_speech_key: e.target.value.trim() }))} />
-                <p className="text-xs text-muted-foreground">portal.azure.com → Speech resource → Keys and Endpoint</p>
+                <p className="text-xs text-muted-foreground">{t('set.tts.azureKeyHint')}</p>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1.5">
-                  <Label>Region</Label>
+                  <Label>{t('set.tts.region')}</Label>
                   <Input placeholder="eastus" value={cfg.azure_speech_region ?? 'eastus'}
                     onChange={e => setCfg(p => ({ ...p, azure_speech_region: e.target.value.trim() }))} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Voice</Label>
+                  <Label>{t('set.common.voice')}</Label>
                   <select value={cfg.tts_voice} onChange={e => setCfg(p => ({ ...p, tts_voice: e.target.value }))}
                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
-                    <option value="th-TH-PremwadeeNeural">หญิง — Premwadee</option>
-                    <option value="th-TH-NiwatNeural">ชาย — Niwat</option>
+                    <option value="th-TH-PremwadeeNeural">{t('set.tts.voiceFemale')}</option>
+                    <option value="th-TH-NiwatNeural">{t('set.tts.voiceMale')}</option>
                   </select>
                 </div>
               </div>
-              <p className="text-xs text-emerald-700">{cfg.azure_speech_key ? '✓ Key ตั้งแล้ว — เสียง Azure Neural คุณภาพสูง' : 'ยังไม่ใส่ key → จะ fallback เป็น MMS (offline)'}</p>
+              <p className="text-xs text-emerald-700">{cfg.azure_speech_key ? t('set.tts.azureSet') : t('set.tts.azureUnset')}</p>
             </div>
           )}
           {cfg.tts_provider === 'volcengine' && (
-            <p className="text-xs text-amber-600">Volcengine requires API key — set in pipeline .env on the server.</p>
+            <p className="text-xs text-amber-600">{t('set.tts.volcNote')}</p>
           )}
           <div className="space-y-2 pt-3 border-t">
-            <Label>โทนเสียงที่ใช้</Label>
+            <Label>{t('set.tts.tone')}</Label>
             <div className="grid grid-cols-2 gap-2">
               <button type="button" onClick={() => setCfg(p => ({ ...p, voice_clone: false }))}
                 className={`rounded-md border px-3 py-2 text-sm text-left transition-colors ${!cfg.voice_clone ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'}`}>
-                🎤 เสียง Original<br /><span className="text-xs text-muted-foreground">ใช้เสียง TTS (Azure/MMS) ตรงๆ</span>
+                {t('set.tts.original')}<br /><span className="text-xs text-muted-foreground">{t('set.tts.originalDesc')}</span>
               </button>
               <button type="button" onClick={() => setCfg(p => ({ ...p, voice_clone: true }))}
                 className={`rounded-md border px-3 py-2 text-sm text-left transition-colors ${cfg.voice_clone ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'}`}>
-                🧬 Clone เสียง<br /><span className="text-xs text-muted-foreground">แปลงให้เหมือนคนในคลิปต้นฉบับ (OpenVoice)</span>
+                {t('set.tts.clone')}<br /><span className="text-xs text-muted-foreground">{t('set.tts.cloneDesc')}</span>
               </button>
             </div>
             <p className="text-xs text-muted-foreground">
-              {cfg.voice_clone
-                ? 'OpenVoice แปลงโทนเสียงที่ gen ให้เหมือนเสียงในวิดีโอ avatar'
-                : 'ใช้เสียงต้นฉบับที่ gen มา — เร็วกว่า + ได้คุณภาพ TTS เต็มๆ'}
+              {cfg.voice_clone ? t('set.tts.cloneHint') : t('set.tts.originalHint')}
             </p>
           </div>
+        </section>
+
+        {/* ── Facebook Live (comment reading + auto-reply) ─────────────── */}
+        <section className="rounded-lg border p-5 space-y-4">
+          <div>
+            <h2 className="text-sm font-semibold">{t('set.fb.title')}</h2>
+            <p className="text-xs text-muted-foreground">
+              {t('set.fb.desc')}{' '}
+              <Link href="/live/fb-test" className="text-primary hover:underline">{t('set.fb.testLink')}</Link>
+            </p>
+            <p className="mt-1 text-xs text-amber-600">{t('set.fb.pageNote')}</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t('set.fb.token')}</Label>
+            <Input type="password" autoComplete="off"
+              placeholder={t('set.fb.tokenPh')}
+              value={cfg.fb_page_token ?? ''}
+              onChange={e => setCfg(p => ({ ...p, fb_page_token: e.target.value.trim() }))} />
+            <p className="text-xs text-muted-foreground">{t('set.fb.tokenHint')}</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t('set.fb.videoId')}</Label>
+            <Input placeholder={t('set.fb.videoIdPh')} value={cfg.fb_live_video_id ?? ''}
+              onChange={e => setCfg(p => ({ ...p, fb_live_video_id: e.target.value.trim() }))} />
+            <p className="text-xs text-muted-foreground">{t('set.fb.videoIdHint')}</p>
+          </div>
+          <p className="text-xs text-emerald-700">{cfg.fb_page_token ? t('set.fb.tokenSet') : t('set.fb.tokenUnset')}</p>
         </section>
 
         {/* ── Lip-sync service ─────────────────────────────────────────── */}
         <section className="rounded-lg border p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold">Lip-sync Service (ai-live-bot)</h2>
+            <h2 className="font-semibold">{t('set.lip.title')}</h2>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" className="h-4 w-4" checked={cfg.lipsync_enabled}
                 onChange={e => setCfg(p => ({ ...p, lipsync_enabled: e.target.checked }))} />
-              Enable
+              {t('set.common.enable')}
             </label>
           </div>
           {cfg.lipsync_enabled && (
@@ -173,18 +198,18 @@ export default function SettingsPage() {
                 {(['mock', 'musetalk', 'wav2lip'] as const).map(m => (
                   <button key={m} type="button" onClick={() => setCfg(p => ({ ...p, lipsync_model: m }))}
                     className={`rounded-md border px-3 py-2 text-xs font-medium transition-colors ${cfg.lipsync_model === m ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'}`}>
-                    {m === 'mock' ? '🧪 mock (no GPU)' : m === 'musetalk' ? '🎭 MuseTalk (RTX 4090)' : '💬 Wav2Lip'}
+                    {m === 'mock' ? t('set.lip.mock') : m === 'musetalk' ? t('set.lip.musetalk') : t('set.lip.wav2lip')}
                   </button>
                 ))}
               </div>
-              {cfg.lipsync_model === 'mock' && <p className="text-xs text-sky-700">Mock mode: static face + real TTS audio. No weights needed. Good for testing the full pipeline.</p>}
-              {cfg.lipsync_model === 'musetalk' && <p className="text-xs text-amber-600">Requires MuseTalk weights ~6GB. Run: <code className="bg-muted px-1 rounded">bash scripts/download_models.sh</code> on the server first.</p>}
+              {cfg.lipsync_model === 'mock' && <p className="text-xs text-sky-700">{t('set.lip.mockNote')}</p>}
+              {cfg.lipsync_model === 'musetalk' && <p className="text-xs text-amber-600">{t('set.lip.musetalkNote')} <code className="bg-muted px-1 rounded">bash scripts/download_models.sh</code> {t('set.lip.musetalkNote2')}</p>}
               <div className="space-y-2">
-                <Label>Lipsync service URL</Label>
+                <Label>{t('set.lip.url')}</Label>
                 <div className="flex gap-2">
                   <Input value={cfg.lipsync_url} onChange={e => setCfg(p => ({ ...p, lipsync_url: e.target.value }))} />
                   <Button variant="outline" size="sm" disabled={testing} onClick={testLipsync}>
-                    {testing ? '…' : 'Test'}
+                    {testing ? '…' : t('set.common.test')}
                   </Button>
                 </div>
                 {testResult && <p className={`text-xs ${testResult.startsWith('✓') ? 'text-emerald-700' : 'text-red-600'}`}>{testResult}</p>}
@@ -195,64 +220,64 @@ export default function SettingsPage() {
 
         {/* ── Output (speed / quality / sound) ─────────────────────────── */}
         <section className="rounded-lg border p-5 space-y-4">
-          <h2 className="font-semibold">Output</h2>
+          <h2 className="font-semibold">{t('set.out.title')}</h2>
           <div className="space-y-2">
-            <Label>Playback speed — {cfg.playback_speed.toFixed(2)}x</Label>
+            <Label>{t('set.out.speed')} — {cfg.playback_speed.toFixed(2)}x</Label>
             <input type="range" min={0.5} max={1.5} step={0.05} value={cfg.playback_speed}
               onChange={(e) => setCfg(p => ({ ...p, playback_speed: Number(e.target.value) }))}
               className="w-full" />
-            <p className="text-xs text-muted-foreground">&lt;1 = ช้าลง, &gt;1 = เร็วขึ้น (audio+video พร้อมกัน, sync คงอยู่)</p>
+            <p className="text-xs text-muted-foreground">{t('set.out.speedHint')}</p>
           </div>
           <div className="space-y-2">
-            <Label>Video quality</Label>
+            <Label>{t('set.out.quality')}</Label>
             <div className="flex gap-2">
               {(['1080p', '720p', '480p'] as const).map(q => (
                 <button key={q} type="button" onClick={() => setCfg(p => ({ ...p, video_quality: q }))}
                   className={`rounded-md border px-3 py-2 text-sm transition-colors ${cfg.video_quality === q ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'}`}>
-                  {q === '1080p' ? 'HD 1080p' : q === '720p' ? '720p' : '480p (เร็ว)'}
+                  {q === '1080p' ? 'HD 1080p' : q === '720p' ? '720p' : t('set.out.q480')}
                 </button>
               ))}
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Sound mode</Label>
+            <Label>{t('set.out.sound')}</Label>
             <div className="flex gap-2">
               {(['soft', 'normal', 'boost'] as const).map(sm => (
                 <button key={sm} type="button" onClick={() => setCfg(p => ({ ...p, sound_mode: sm }))}
                   className={`rounded-md border px-3 py-2 text-sm transition-colors ${cfg.sound_mode === sm ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'}`}>
-                  {sm === 'soft' ? '🔉 เบา' : sm === 'normal' ? '🔊 ปกติ' : '📢 ดังพิเศษ'}
+                  {sm === 'soft' ? t('set.out.soundSoft') : sm === 'normal' ? t('set.out.soundNormal') : t('set.out.soundBoost')}
                 </button>
               ))}
             </div>
           </div>
           <div className="space-y-2">
-            <Label>ความเนียนขอบปาก (Lip blend) — {cfg.lip_blend ?? 30}%</Label>
+            <Label>{t('set.out.lipBlend')} — {cfg.lip_blend ?? 30}%</Label>
             <input type="range" min={0} max={100} step={5} value={cfg.lip_blend ?? 30}
               onChange={(e) => setCfg(p => ({ ...p, lip_blend: Number(e.target.value) }))}
               className="w-full" />
-            <p className="text-xs text-muted-foreground">feather ขอบ lip-sync ให้กลืนกับเฟรม — 0% = ขอบคม (เห็นกล่อง), สูง = เนียนนุ่ม. แนะนำ 30–50%</p>
+            <p className="text-xs text-muted-foreground">{t('set.out.lipBlendHint')}</p>
           </div>
         </section>
 
         {/* ── Streaming defaults ───────────────────────────────────────── */}
         <section className="rounded-lg border p-5 space-y-4">
-          <h2 className="font-semibold">Streaming Defaults</h2>
+          <h2 className="font-semibold">{t('set.stream.title')}</h2>
           <div className="space-y-2">
-            <Label>Default RTMP URL</Label>
+            <Label>{t('set.stream.rtmp')}</Label>
             <Input value={cfg.default_rtmp_url} onChange={e => setCfg(p => ({ ...p, default_rtmp_url: e.target.value }))} />
           </div>
           <div className="space-y-2">
-            <Label>Default clip duration (seconds)</Label>
+            <Label>{t('set.stream.duration')}</Label>
             <Input type="number" min={1} max={3600} value={cfg.default_duration}
               onChange={e => setCfg(p => ({ ...p, default_duration: Number(e.target.value) || 30 }))} />
           </div>
         </section>
 
         {error && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
-        {saved && <p className="text-sm text-emerald-700">✓ Settings saved</p>}
+        {saved && <p className="text-sm text-emerald-700">{t('set.saved')}</p>}
 
         <Button className="w-full" size="lg" disabled={saving} onClick={save}>
-          {saving ? 'Saving…' : 'Save all settings'}
+          {saving ? t('set.saving') : t('set.save')}
         </Button>
       </div>
     </main>

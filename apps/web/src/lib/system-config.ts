@@ -16,6 +16,8 @@ export type SystemConfig = {
   azure_speech_region: string
   default_rtmp_url: string
   default_duration: number
+  fb_page_token: string      // Facebook Page access token (for reading live comments + posting replies)
+  fb_live_video_id: string   // Facebook live video id to poll comments from
 }
 
 export const SYSTEM_CONFIG_DEFAULTS: SystemConfig = {
@@ -34,4 +36,6 @@ export const SYSTEM_CONFIG_DEFAULTS: SystemConfig = {
   azure_speech_region: 'eastus',
   default_rtmp_url: 'rtmps://live-api-s.facebook.com:443/rtmp/',
   default_duration: 30,
+  fb_page_token: '',
+  fb_live_video_id: '',
 }
