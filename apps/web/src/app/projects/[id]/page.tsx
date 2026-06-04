@@ -164,7 +164,7 @@ export default async function ProjectDetailPage({
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Versions ({versions.length})</CardTitle>
-                <CardDescription>ทุกครั้งที่ render จะเก็บเวอร์ชันใหม่ (ไม่ทับของเก่า) — เลือก checkbox เพื่อลบหลายอัน</CardDescription>
+                <CardDescription>{t('ver.desc')}</CardDescription>
               </CardHeader>
               <CardContent>
                 <VersionList projectId={data.id} versions={versions} />

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useI18n } from '@/components/LocaleProvider'
+import { UploadTile, compressImage, uploadFile } from '@/components/UploadTile'
 
 type Avatar = {
   id: string
@@ -35,6 +36,8 @@ export default function AvatarsPage() {
   const [form, setForm] = useState<FormState>(emptyForm())
   const [uploadingImg, setUploadingImg] = useState(false)
   const [uploadingVid, setUploadingVid] = useState(false)
+  const [localImg, setLocalImg] = useState<string | null>(null)
+  const [localVid, setLocalVid] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -52,39 +55,19 @@ export default function AvatarsPage() {
   function cancelEdit() { setEditId(null); setForm(emptyForm()); setError(null) }
   void setEditId  // editId stays for create-mode display; edit moved to /avatars/[id]
 
-  async function uploadFile(file: Blob, filename: string): Promise<string> {
-    const fd = new FormData()
-    fd.append('file', file, filename)
-    const r = await fetch('/api/uploads', { method: 'POST', body: fd })
-    const d = (await r.json()) as { url?: string; error?: string }
-    if (!r.ok || !d.url) throw new Error(d.error ?? `upload HTTP ${r.status}`)
-    return d.url
-  }
-
-  async function compressImage(file: File): Promise<Blob> {
-    if (!file.type.startsWith('image/')) return file
-    const bmp = await createImageBitmap(file).catch(() => null)
-    if (!bmp) return file
-    const s = Math.min(1, 1920 / Math.max(bmp.width, bmp.height))
-    const c = document.createElement('canvas')
-    c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s)
-    c.getContext('2d')?.drawImage(bmp, 0, 0, c.width, c.height)
-    return await new Promise<Blob | null>(res => c.toBlob(res, 'image/jpeg', 0.85)) ?? file
-  }
-
-  async function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]; if (!f) return
+  async function onPickImage(f: File) {
+    setLocalImg(URL.createObjectURL(f)) // instant preview while uploading
     setUploadingImg(true); setError(null)
-    try { const b = await compressImage(f); setForm(p => ({ ...p, imageUrl: '' })); const url = await uploadFile(b, 'preview.jpg'); setForm(p => ({ ...p, imageUrl: url })) }
-    catch (err) { setError(err instanceof Error ? err.message : String(err)) }
+    try { const url = await uploadFile(await compressImage(f), 'preview.jpg'); setForm(p => ({ ...p, imageUrl: url })); setLocalImg(null) }
+    catch (err) { setLocalImg(null); setError(err instanceof Error ? err.message : String(err)) }
     finally { setUploadingImg(false) }
   }
 
-  async function onPickVideo(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]; if (!f) return
+  async function onPickVideo(f: File) {
+    setLocalVid(URL.createObjectURL(f))
     setUploadingVid(true); setError(null)
-    try { const url = await uploadFile(f, f.name); setForm(p => ({ ...p, videoUrl: url })) }
-    catch (err) { setError(err instanceof Error ? err.message : String(err)) }
+    try { const url = await uploadFile(f, f.name); setForm(p => ({ ...p, videoUrl: url })); setLocalVid(null) }
+    catch (err) { setLocalVid(null); setError(err instanceof Error ? err.message : String(err)) }
     finally { setUploadingVid(false) }
   }
 
@@ -154,27 +137,19 @@ export default function AvatarsPage() {
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label>{t('av.image')} <span className="text-muted-foreground text-xs">({t('av.optional')})</span></Label>
-        {form.imageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={form.imageUrl} alt="" className="mb-1 h-20 w-14 rounded object-cover border" />
-        )}
-        <input type="file" accept="image/*" onChange={onPickImage} className="block w-full text-xs" />
-        {uploadingImg && <p className="text-xs text-amber-600">{t('av.uploading')}</p>}
-        {form.imageUrl && !uploadingImg && <p className="text-xs text-emerald-600">{t('av.uploaded')}</p>}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>{t('av.image')} <span className="text-muted-foreground text-xs">({t('av.optional')})</span></Label>
+          <UploadTile kind="image" url={form.imageUrl} localUrl={localImg} uploading={uploadingImg} emptyIcon="🎭" onPick={onPickImage} />
+          {form.imageUrl && !uploadingImg && <p className="text-xs text-emerald-600">{t('av.uploaded')}</p>}
+        </div>
+        <div className="space-y-2">
+          <Label>{t('av.video')} <span className="text-muted-foreground text-xs">({t('av.optional')})</span></Label>
+          <UploadTile kind="video" url={form.videoUrl} localUrl={localVid} uploading={uploadingVid} emptyIcon="🎬" onPick={onPickVideo} />
+          {form.videoUrl && !uploadingVid && <p className="text-xs text-emerald-600 break-all">{t('av.uploaded')}</p>}
+        </div>
       </div>
-
-      <div className="space-y-2">
-        <Label>{t('av.video')} <span className="text-muted-foreground text-xs">({t('av.optional')})</span></Label>
-        {form.videoUrl && (
-          <video src={form.videoUrl} className="mb-1 h-24 w-auto rounded border bg-black" muted playsInline controls />
-        )}
-        <input type="file" accept="video/*" onChange={onPickVideo} className="block w-full text-xs" />
-        {uploadingVid && <p className="text-xs text-amber-600">{t('av.uploading')}</p>}
-        {form.videoUrl && !uploadingVid && <p className="text-xs text-emerald-600 break-all">{t('av.uploaded')}</p>}
-        <p className="text-[11px] text-muted-foreground">{t('av.videoHint')}</p>
-      </div>
+      <p className="text-[11px] text-muted-foreground">{t('av.videoHint')}</p>
 
       <div className="space-y-2">
         <Label>{t('av.details')} <span className="text-muted-foreground text-xs">({t('av.optional')})</span></Label>

@@ -9,30 +9,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useI18n } from '@/components/LocaleProvider'
+import { UploadTile, compressImage, uploadFile } from '@/components/UploadTile'
 
 const REGIONS = ['TH', 'ID', 'VN', 'MY', 'CN', 'EN']
-
-// Canvas-compress an image to Full-HD (1920 long edge) JPEG before upload.
-async function compressImage(file: File): Promise<Blob> {
-  if (!file.type.startsWith('image/')) return file
-  const bmp = await createImageBitmap(file).catch(() => null)
-  if (!bmp) return file
-  const s = Math.min(1, 1920 / Math.max(bmp.width, bmp.height))
-  const c = document.createElement('canvas')
-  c.width = Math.round(bmp.width * s)
-  c.height = Math.round(bmp.height * s)
-  c.getContext('2d')?.drawImage(bmp, 0, 0, c.width, c.height)
-  return (await new Promise<Blob | null>((res) => c.toBlob(res, 'image/jpeg', 0.9))) ?? file
-}
-
-async function uploadFile(blob: Blob, filename: string): Promise<string> {
-  const fd = new FormData()
-  fd.append('file', blob, filename)
-  const r = await fetch('/api/uploads', { method: 'POST', body: fd })
-  const d = (await r.json()) as { url?: string; error?: string }
-  if (!r.ok || !d.url) throw new Error(d.error ?? `upload HTTP ${r.status}`)
-  return d.url
-}
 
 export default function AvatarEditPage() {
   const { t } = useI18n()
@@ -49,6 +28,8 @@ export default function AvatarEditPage() {
   const [videoUrl, setVideoUrl] = useState('')
   const [uploadingImg, setUploadingImg] = useState(false)
   const [uploadingVid, setUploadingVid] = useState(false)
+  const [localImg, setLocalImg] = useState<string | null>(null)
+  const [localVid, setLocalVid] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
@@ -70,18 +51,18 @@ export default function AvatarEditPage() {
       .finally(() => setLoading(false))
   }, [id])
 
-  async function onImg(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]; if (!f) return
+  async function onImg(f: File) {
+    setLocalImg(URL.createObjectURL(f)) // instant preview while uploading
     setUploadingImg(true); setError(null)
-    try { setImageUrl(await uploadFile(await compressImage(f), 'preview.jpg')) }
-    catch (err) { setError(err instanceof Error ? err.message : String(err)) }
+    try { setImageUrl(await uploadFile(await compressImage(f), 'preview.jpg')); setLocalImg(null) }
+    catch (err) { setLocalImg(null); setError(err instanceof Error ? err.message : String(err)) }
     finally { setUploadingImg(false) }
   }
-  async function onVid(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]; if (!f) return
+  async function onVid(f: File) {
+    setLocalVid(URL.createObjectURL(f))
     setUploadingVid(true); setError(null)
-    try { setVideoUrl(await uploadFile(f, f.name)) }
-    catch (err) { setError(err instanceof Error ? err.message : String(err)) }
+    try { setVideoUrl(await uploadFile(f, f.name)); setLocalVid(null) }
+    catch (err) { setLocalVid(null); setError(err instanceof Error ? err.message : String(err)) }
     finally { setUploadingVid(false) }
   }
 
@@ -132,20 +113,11 @@ export default function AvatarEditPage() {
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>{t('av.image')}</Label>
-            {imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={imageUrl} alt="" className="aspect-[2/3] w-full rounded-xl object-cover border" />
-            ) : <div className="flex aspect-[2/3] w-full items-center justify-center rounded-xl bg-muted text-3xl">🎭</div>}
-            <input type="file" accept="image/*" onChange={onImg} className="block w-full text-xs" />
-            {uploadingImg && <p className="text-xs text-amber-600">{t('av.uploading')} (FullHD)</p>}
+            <UploadTile kind="image" url={imageUrl} localUrl={localImg} uploading={uploadingImg} emptyIcon="🎭" onPick={onImg} />
           </div>
           <div className="space-y-2">
             <Label>{t('av.video')}</Label>
-            {videoUrl ? (
-              <video src={videoUrl} className="aspect-[2/3] w-full rounded-xl object-cover border bg-black" muted playsInline controls />
-            ) : <div className="flex aspect-[2/3] w-full items-center justify-center rounded-xl bg-muted text-3xl">🎬</div>}
-            <input type="file" accept="video/*" onChange={onVid} className="block w-full text-xs" />
-            {uploadingVid && <p className="text-xs text-amber-600">{t('av.uploading')}</p>}
+            <UploadTile kind="video" url={videoUrl} localUrl={localVid} uploading={uploadingVid} emptyIcon="🎬" onPick={onVid} />
           </div>
         </div>
         <p className="text-[11px] text-muted-foreground">{t('av.videoHint')}</p>

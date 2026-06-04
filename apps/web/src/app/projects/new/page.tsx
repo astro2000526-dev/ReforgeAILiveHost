@@ -24,12 +24,13 @@ type Segment = {
   duration_sec?: number
 }
 
+// label/hint are i18n keys — resolved with t() at render time.
 const VOICE_OPTIONS = [
-  { id: 'BV001_streaming', label: '通用女声 · 中文', hint: '稳重清晰，适合大多数品类', lang: 'zh-CN' },
-  { id: 'BV700_streaming', label: '灿灿（活泼）· 中文', hint: '亲和有活力，适合美妆/服饰', lang: 'zh-CN' },
-  { id: 'BV421_streaming', label: '天才少女 · 多语言', hint: '中文 / 越南语 / 印尼语兼容', lang: 'zh-CN' },
-  { id: 'th-TH-PremwadeeNeural', label: 'Premwadee · ไทย (หญิง)', hint: 'Warm & professional — health / beauty', lang: 'th-TH' },
-  { id: 'th-TH-NiwatNeural', label: 'Niwat · ไทย (ชาย)', hint: 'Neutral & steady — 3C / appliances', lang: 'th-TH' },
+  { id: 'BV001_streaming', label: 'voice.bv001.label', hint: 'voice.bv001.hint', lang: 'zh-CN' },
+  { id: 'BV700_streaming', label: 'voice.bv700.label', hint: 'voice.bv700.hint', lang: 'zh-CN' },
+  { id: 'BV421_streaming', label: 'voice.bv421.label', hint: 'voice.bv421.hint', lang: 'zh-CN' },
+  { id: 'th-TH-PremwadeeNeural', label: 'voice.prem.label', hint: 'voice.prem.hint', lang: 'th-TH' },
+  { id: 'th-TH-NiwatNeural', label: 'voice.niwat.label', hint: 'voice.niwat.hint', lang: 'th-TH' },
 ]
 
 // Script language follows the UI language the user picked in the header.
@@ -353,8 +354,8 @@ export default function NewProjectPage() {
                     voice === v.id ? 'border-primary ring-2 ring-primary/30' : 'border-border'
                   }`}
                 >
-                  <p className="text-sm font-medium">{v.label}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{v.hint}</p>
+                  <p className="text-sm font-medium">{t(v.label)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{t(v.hint)}</p>
                 </button>
               ))}
             </div>

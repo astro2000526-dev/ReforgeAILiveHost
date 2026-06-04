@@ -18,13 +18,12 @@ type Item = {
   postError?: string
 }
 
-const POLL_MS = 4000
-
-// Dedicated TEST page: poll a Facebook live video's comments, draft an AI reply
-// for each, and (manually, or via the opt-in auto-post toggle) publish it back
-// to FB. Page token lives server-side in Settings — never touches this client.
+// Dedicated TEST page: subscribe (SSE) to a Facebook live video's comments,
+// draft an AI reply for each, and (manually, or via the opt-in auto-post
+// toggle) publish it back to FB. The server polls FB Graph once per stream and
+// pushes only NEW comments. Page token lives server-side in Settings.
 export default function FbLiveTestPage() {
-  const { locale } = useI18n()
+  const { locale, t } = useI18n()
   const [running, setRunning] = useState(false)
   const [videoId, setVideoId] = useState('') // optional override; blank = use Settings
   const [product, setProduct] = useState('')
@@ -78,14 +77,18 @@ export default function FbLiveTestPage() {
     }
   }
 
-  const poll = useCallback(async () => {
+  // SSE: one long-lived connection — the server pushes only fresh comments.
+  useEffect(() => {
+    if (!running) return
+    setStatus('connecting…')
     const params = new URLSearchParams()
-    if (afterRef.current) params.set('after', afterRef.current)
     if (videoIdRef.current.trim()) params.set('video_id', videoIdRef.current.trim())
-    try {
-      const r = await fetch(`/api/live/comments?${params.toString()}`, { cache: 'no-store' })
-      const d = (await r.json()) as { comments?: Item[]; error?: string }
-      if (!r.ok) { setError(d.error ?? `HTTP ${r.status}`); setStatus('error'); return }
+    const es = new EventSource(`/api/live/comments/stream?${params.toString()}`)
+    es.onopen = () => { setError(null); setStatus(`live · ${seenRef.current.size} seen`) }
+    es.onmessage = (e) => {
+      let d: { comments?: Item[]; error?: string }
+      try { d = JSON.parse(e.data) } catch { return }
+      if (d.error) { setError(d.error); setStatus('error'); return }
       setError(null)
       const fresh = (d.comments ?? []).filter((c) => !seenRef.current.has(c.id))
       if (fresh.length) {
@@ -94,37 +97,29 @@ export default function FbLiveTestPage() {
         setItems((xs) => [...fresh, ...xs])
         if (autoReplyRef.current) fresh.forEach((c) => void genReply(c))
       }
-      setStatus(`polling · ${seenRef.current.size} seen`)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e)); setStatus('error')
+      setStatus(`live · ${seenRef.current.size} seen`)
     }
-  }, [genReply])
-
-  useEffect(() => {
-    if (!running) return
-    setStatus('polling…')
-    void poll()
-    const id = setInterval(() => void poll(), POLL_MS)
-    return () => clearInterval(id)
-  }, [running, poll])
+    // transient drops are fine — EventSource reconnects on its own
+    es.onerror = () => setStatus('reconnecting…')
+    return () => es.close()
+  }, [running, genReply])
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
       <Link href="/dashboard" className="text-xs font-mono uppercase tracking-widest text-muted-foreground hover:text-foreground">← back</Link>
       <h1 className="mt-2 text-3xl font-semibold tracking-tight">FB Live · comment test</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        อ่านคอมเมนต์จาก Facebook Live แล้วร่าง AI reply — โพสต์กลับ FB ตอนกด Send (หรือเปิด auto-post).
-        ใส่ Page Token ที่หน้า <Link href="/settings" className="text-primary hover:underline">Settings</Link> ก่อน.
+        {t('fb.sub')} (<Link href="/settings" className="text-primary hover:underline">Settings</Link>)
       </p>
 
       <div className="lux-card mt-6 space-y-4 rounded-2xl border bg-card p-5">
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Live Video ID <span className="opacity-60">(เว้นว่าง = ใช้ค่าใน Settings)</span></label>
+          <label className="text-xs font-medium text-muted-foreground">Live Video ID <span className="opacity-60">{t('fb.videoIdHint')}</span></label>
           <Input placeholder="e.g. 1234567890123456" value={videoId} onChange={(e) => setVideoId(e.target.value)} disabled={running} />
         </div>
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-muted-foreground">สินค้า (context ให้ AI)</label>
-          <Input placeholder="เช่น ครีมกันแดด SPF50" value={product} onChange={(e) => setProduct(e.target.value)} />
+          <label className="text-xs font-medium text-muted-foreground">{t('fb.product')}</label>
+          <Input placeholder={t('fb.productPh')} value={product} onChange={(e) => setProduct(e.target.value)} />
         </div>
         <div className="flex flex-wrap items-center gap-4">
           <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -142,13 +137,13 @@ export default function FbLiveTestPage() {
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          สถานะ: <span className="font-mono">{status}</span>
+          {t('fb.status')} <span className="font-mono">{status}</span>
           {error && <span className="text-destructive"> · {error}</span>}
         </p>
       </div>
 
       <div className="mt-6 space-y-3">
-        {items.length === 0 && <p className="text-sm text-muted-foreground">ยังไม่มีคอมเมนต์ — กด Start polling</p>}
+        {items.length === 0 && <p className="text-sm text-muted-foreground">{t('fb.empty')}</p>}
         {items.map((it) => (
           <div key={it.id} className="lux-card rounded-xl border bg-card p-4">
             <p className="text-sm">
@@ -159,7 +154,7 @@ export default function FbLiveTestPage() {
             <div className="mt-2 rounded-lg bg-muted/50 p-2 text-sm">
               <span className="text-primary font-medium">🤖 </span>
               {it.replyPending
-                ? <span className="text-muted-foreground">กำลังคิด…</span>
+                ? <span className="text-muted-foreground">{t('live.thinking')}</span>
                 : (it.reply ?? <button onClick={() => void genReply(it)} className="text-primary hover:underline">draft reply</button>)}
             </div>
             {it.reply && !it.replyPending && (
