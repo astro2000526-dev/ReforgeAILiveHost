@@ -50,6 +50,9 @@ ok "config ready — HOST_IP=$HOST_IP DATA_DIR=$DATA_DIR"
 mkdir -p "$DATA_DIR"/{pgdata,ollama,nginx,status} \
          "$DATA_DIR"/pipeline/{tmp,output,models,openvoice} "$DATA_DIR"/pipeline/output/uploads \
          "$DATA_DIR"/lipsync/{models,runtime}
+# The pipeline container runs as uid 1000 (USER pipeline) — its mounted dirs
+# must be writable by it or uploads/renders fail with EACCES.
+chown -R 1000:1000 "$DATA_DIR"/pipeline 2>/dev/null || true
 export HOST_IP
 envsubst '${HOST_IP}' < "$DEPLOY/nginx/default.conf.template"   > "$DATA_DIR/nginx/default.conf"
 envsubst '${HOST_IP}' < "$DEPLOY/status/index.html.template"    > "$DATA_DIR/status/index.html"

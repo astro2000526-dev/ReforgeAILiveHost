@@ -27,8 +27,21 @@ fetch() {
   fi
   mkdir -p "$(dirname "$dest")"
   log "↓ $(basename "$dest")"
-  curl -fL --retry 3 --retry-delay 2 -C - -o "$dest" "$url" \
-    || { rm -f "$dest"; die "download failed: $url"; }
+  if ! curl -fL --retry 3 --retry-delay 2 --connect-timeout 20 --speed-limit 1024 --speed-time 60 -C - -o "$dest" "$url"; then
+    # `-C -` on an already-complete file → HTTP 416. Verify against the
+    # remote size before dying: if they match, the file is simply done.
+    local remote have
+    remote=$(curl -fsLI "$url" 2>/dev/null | tr -d '\r' | awk 'tolower($1)=="content-length:"{s=$2} END{print s}')
+    have=$(stat -c%s "$dest" 2>/dev/null || echo 0)
+    if [ -n "$remote" ] && [ "$have" = "$remote" ]; then
+      ok "have $(basename "$dest") (was already complete)"
+    elif [ -z "$remote" ] && [ "$have" -gt 0 ]; then
+      # HEAD flaked — but a 416 on resume already implies local >= remote.
+      warn "kept $(basename "$dest") ($have B, size unverified — HEAD failed)"
+    else
+      rm -f "$dest"; die "download failed: $url"
+    fi
+  fi
   if [ -n "$want" ]; then
     local got; got=$(stat -c%s "$dest" 2>/dev/null || echo 0)
     [ "$got" = "$want" ] || { rm -f "$dest"; die "size mismatch for $dest (got $got want $want)"; }
@@ -44,7 +57,7 @@ fetch_soft() {
   fi
   mkdir -p "$(dirname "$dest")"
   log "↓ $(basename "$dest") (optional)"
-  if curl -fL --retry 3 --retry-delay 2 -C - -o "$dest" "$url" 2>/dev/null; then return 0; fi
+  if curl -fL --retry 3 --retry-delay 2 --connect-timeout 20 --speed-limit 1024 --speed-time 60 -C - -o "$dest" "$url" 2>/dev/null; then return 0; fi
   rm -f "$dest"; return 1
 }
 
