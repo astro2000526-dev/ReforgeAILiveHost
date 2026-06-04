@@ -41,6 +41,8 @@ export default function AvatarsPage() {
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [savingOrder, setSavingOrder] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -53,6 +55,44 @@ export default function AvatarsPage() {
   useEffect(() => { load() }, [])
 
   function cancelEdit() { setEditId(null); setForm(emptyForm()); setError(null) }
+
+  // ── drag-to-sort ────────────────────────────────────────────────────────
+  // HTML5 DnD: dragging a card over another swaps it into that slot
+  // (optimistic), drop persists display_order = (index+1)*10 for every card
+  // whose slot changed.
+  function onDragOverCard(overId: string) {
+    if (!dragId || dragId === overId) return
+    setAvatars((xs) => {
+      const from = xs.findIndex((a) => a.id === dragId)
+      const to = xs.findIndex((a) => a.id === overId)
+      if (from < 0 || to < 0) return xs
+      const next = [...xs]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+  }
+
+  async function persistOrder() {
+    setDragId(null)
+    setSavingOrder(true)
+    try {
+      const changed = avatars
+        .map((a, i) => ({ id: a.id, order: (i + 1) * 10, prev: a.display_order }))
+        .filter((x) => x.prev !== x.order)
+      await Promise.all(changed.map((x) =>
+        fetch(`/api/avatars/${x.id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ display_order: x.order }),
+        })
+      ))
+      // sync local copy so further drags diff correctly
+      setAvatars((xs) => xs.map((a, i) => ({ ...a, display_order: (i + 1) * 10 })))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      await load() // restore server truth on failure
+    } finally { setSavingOrder(false) }
+  }
   void setEditId  // editId stays for create-mode display; edit moved to /avatars/[id]
 
   async function onPickImage(f: File) {
@@ -185,6 +225,9 @@ export default function AvatarsPage() {
         <section>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-medium">{t('av.existing')}</h2>
+            <span className="text-xs text-muted-foreground">
+              {savingOrder ? t('av.orderSaving') : t('av.dragSort')}
+            </span>
             {editId && (
               <Button size="sm" variant="outline" onClick={cancelEdit}>{t('av.add')} (new)</Button>
             )}
@@ -196,10 +239,21 @@ export default function AvatarsPage() {
           ) : (
             <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
               {avatars.map((a) => (
-                <div key={a.id} className={`rounded-lg border p-3 transition-colors ${editId === a.id ? 'border-primary ring-2 ring-primary/30' : 'hover:bg-muted/30'}`}>
+                <div
+                  key={a.id}
+                  draggable
+                  onDragStart={(e) => { setDragId(a.id); e.dataTransfer.effectAllowed = 'move' }}
+                  onDragOver={(e) => { e.preventDefault(); onDragOverCard(a.id) }}
+                  onDragEnd={() => void persistOrder()}
+                  onDrop={(e) => e.preventDefault()}
+                  className={`cursor-grab active:cursor-grabbing rounded-lg border p-3 transition-colors ${
+                    dragId === a.id ? 'opacity-50 ring-2 ring-primary/50' :
+                    editId === a.id ? 'border-primary ring-2 ring-primary/30' : 'hover:bg-muted/30'
+                  }`}
+                >
                   {a.preview_image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={a.preview_image_url} alt={a.name} className="mb-2 aspect-[2/3] w-full rounded-md object-cover" />
+                    <img src={a.preview_image_url} alt={a.name} draggable={false} className="mb-2 aspect-[2/3] w-full rounded-md object-cover" />
                   ) : (
                     <div className="mb-2 flex aspect-[2/3] w-full items-center justify-center rounded-md bg-muted text-3xl text-muted-foreground">🎭</div>
                   )}

@@ -1,9 +1,11 @@
 'use client'
 
 // /gallery — auto news-clip factory.
-// Press Start → loop forever: fetch news → Qwen writes a sales-pitch script →
-// render clip on the GPU pipeline → show in grid → next article. Press Stop to
-// end after the current clip. Keeps the GPU box busy instead of idling.
+// The generation loop runs SERVER-SIDE (lib/gallery-loop.ts): press Start and
+// close the tab — clips keep coming until someone presses Stop. This page is
+// just a remote control + viewer: it subscribes to /api/gallery/loop/stream
+// (SSE) so every open browser shows the same live on/off state, phase and
+// progress, no matter who started or stopped the loop.
 
 import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -24,11 +26,22 @@ type Clip = {
   progress: number
   video_url: string | null
 }
-type Phase = 'idle' | 'news' | 'script' | 'render' | 'cooldown'
-
-const POLL_MS = 3000
-const MAX_POLLS = 400          // ≈20 min per clip before declaring it stuck
-const ERROR_BACKOFF_MS = 15000 // wait before retrying after a failed iteration
+type LoopState = {
+  running: boolean
+  phase: 'idle' | 'news' | 'render' | 'cooldown'
+  current_title: string | null
+  render_pct: number
+  clip_count: number
+  last_error: string | null
+  started_at: string | null
+  settings: {
+    avatar_id: string
+    language: string
+    product?: string
+    topic?: string
+    duration_seconds: number
+  } | null
+}
 
 export default function GalleryPage() {
   const { t } = useI18n()
@@ -39,17 +52,12 @@ export default function GalleryPage() {
   const [topic, setTopic] = useState('')
   const [duration, setDuration] = useState(45)
 
-  const [running, setRunning] = useState(false)
-  const [phase, setPhase] = useState<Phase>('idle')
-  const [currentTitle, setCurrentTitle] = useState('')
-  const [renderPct, setRenderPct] = useState(0)
-  const [clipCount, setClipCount] = useState(0)
-  const [lastError, setLastError] = useState<string | null>(null)
+  const [loop, setLoop] = useState<LoopState | null>(null)
+  const [busy, setBusy] = useState(false) // start/stop request in flight
   const [clips, setClips] = useState<Clip[]>([])
   const [loadingClips, setLoadingClips] = useState(true)
-
-  // the loop reads this ref so Stop takes effect without re-creating the loop
-  const runningRef = useRef(false)
+  const clipCountRef = useRef(-1)
+  const seededRef = useRef(false)
 
   const loadClips = useCallback(async () => {
     try {
@@ -73,94 +81,52 @@ export default function GalleryPage() {
       .catch(() => {})
   }, [loadClips])
 
-  const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms))
-
-  async function runOnce(): Promise<void> {
-    // 1+2. news + script + project (single API call)
-    setPhase('news')
-    setCurrentTitle('')
-    setRenderPct(0)
-    const runRes = await fetch('/api/gallery/run', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        avatar_id: avatarId,
-        language,
-        product: product.trim() || undefined,
-        topic: topic.trim() || undefined,
-        duration_seconds: duration,
-      }),
-    })
-    const run = (await runRes.json()) as { project_id?: string; news_title?: string; error?: string }
-    if (!runRes.ok || !run.project_id) throw new Error(run.error ?? `HTTP ${runRes.status}`)
-    setCurrentTitle(run.news_title ?? '')
-    await loadClips()
-
-    // 3. render via the existing project render route
-    setPhase('render')
-    const renderRes = await fetch(`/api/projects/${run.project_id}/render`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ duration_seconds: duration }),
-    })
-    const render = (await renderRes.json()) as { ok?: boolean; error?: string }
-    if (!renderRes.ok || !render.ok) throw new Error(render.error ?? `render HTTP ${renderRes.status}`)
-
-    // 4. poll until done/failed
-    for (let i = 0; i < MAX_POLLS; i++) {
-      await sleep(POLL_MS)
-      if (!runningRef.current) return // user stopped — abandon polling, render finishes server-side
-      try {
-        const sr = await fetch(`/api/projects/${run.project_id}/render-status`, { cache: 'no-store' })
-        const s = (await sr.json()) as { status?: string; pct?: number; errors?: string[] }
-        setRenderPct(s.pct ?? 0)
-        if (s.status === 'done') {
-          setClipCount((c) => c + 1)
-          await loadClips()
-          return
-        }
-        if (s.status === 'failed') throw new Error((s.errors ?? []).join('; ') || 'render failed')
-      } catch (err) {
-        if (err instanceof Error && err.message !== 'Failed to fetch') throw err
-        // transient network blip — keep polling
+  // live shared state — SSE pushes every change (any user's start/stop included)
+  useEffect(() => {
+    const es = new EventSource('/api/gallery/loop/stream')
+    es.onmessage = (ev) => {
+      const state = JSON.parse(ev.data) as LoopState
+      setLoop(state)
+      // first event: seed the form with the settings the loop is running with
+      if (!seededRef.current && state.settings) {
+        seededRef.current = true
+        setAvatarId(state.settings.avatar_id)
+        setLanguage(state.settings.language)
+        setProduct(state.settings.product ?? '')
+        setTopic(state.settings.topic ?? '')
+        setDuration(state.settings.duration_seconds)
+      }
+      // a clip finished (or a new run started) → refresh the grid
+      if (state.clip_count !== clipCountRef.current) {
+        clipCountRef.current = state.clip_count
+        void loadClips()
       }
     }
-    throw new Error('render timed out')
-  }
+    return () => es.close()
+  }, [loadClips])
 
-  async function loop() {
-    while (runningRef.current) {
-      try {
-        setLastError(null)
-        await runOnce()
-      } catch (err) {
-        setLastError(err instanceof Error ? err.message : String(err))
-        setPhase('cooldown')
-        await sleep(ERROR_BACKOFF_MS)
-      }
+  async function send(body: Record<string, unknown>) {
+    setBusy(true)
+    try {
+      const r = await fetch('/api/gallery/loop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const d = (await r.json()) as { state?: LoopState; error?: string }
+      if (d.state) setLoop(d.state)
+    } finally {
+      setBusy(false)
     }
-    setPhase('idle')
-    setCurrentTitle('')
   }
 
-  function start() {
-    if (!avatarId) return
-    runningRef.current = true
-    setRunning(true)
-    setClipCount(0)
-    void loop()
-  }
+  const running = loop?.running ?? false
+  const phase = loop?.phase ?? 'idle'
 
-  function stop() {
-    runningRef.current = false
-    setRunning(false)
-  }
-
-  const phaseLabel: Record<Phase, string> = {
+  const phaseLabel: Record<LoopState['phase'], string> = {
     idle: '',
     news: t('gallery.phase.news'),
-    script: t('gallery.phase.script'),
-    render: `${t('gallery.phase.render')} ${renderPct}%`,
+    render: `${t('gallery.phase.render')} ${loop?.render_pct ?? 0}%`,
     cooldown: t('gallery.phase.cooldown'),
   }
 
@@ -170,7 +136,19 @@ export default function GalleryPage() {
         <Link href="/dashboard" className="text-xs font-mono uppercase tracking-widest text-muted-foreground hover:text-foreground">
           {t('common.back')}
         </Link>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">{t('gallery.title')}</h1>
+        <div className="mt-2 flex items-center gap-3">
+          <h1 className="text-3xl font-semibold tracking-tight">{t('gallery.title')}</h1>
+          {loop && (
+            <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+              running
+                ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400'
+                : 'border-border bg-muted text-muted-foreground'
+            }`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${running ? 'animate-pulse bg-emerald-500' : 'bg-muted-foreground/50'}`} />
+              {running ? t('gallery.statusOn') : t('gallery.statusOff')}
+            </span>
+          )}
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">{t('gallery.subtitle')}</p>
       </header>
 
@@ -224,27 +202,33 @@ export default function GalleryPage() {
 
         <div className="mt-5 flex items-center gap-4">
           {running ? (
-            <Button variant="destructive" onClick={stop}>⏹ {t('gallery.stop')}</Button>
+            <Button variant="destructive" disabled={busy} onClick={() => send({ action: 'stop' })}>
+              ⏹ {t('gallery.stop')}
+            </Button>
           ) : (
-            <Button onClick={start} disabled={!avatarId}>▶ {t('gallery.start')}</Button>
+            <Button disabled={busy || !avatarId || loop === null}
+              onClick={() => send({ action: 'start', avatar_id: avatarId, language, product, topic, duration_seconds: duration })}>
+              ▶ {t('gallery.start')}
+            </Button>
           )}
           {running && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
               <span>{phaseLabel[phase]}</span>
-              {currentTitle && <span className="max-w-[28rem] truncate font-medium text-foreground">— {currentTitle}</span>}
+              {loop?.current_title && (
+                <span className="max-w-[28rem] truncate font-medium text-foreground">— {loop.current_title}</span>
+              )}
             </div>
           )}
-          {clipCount > 0 && (
-            <span className="text-sm text-muted-foreground">{t('gallery.made')} {clipCount}</span>
+          {(loop?.clip_count ?? 0) > 0 && (
+            <span className="text-sm text-muted-foreground">{t('gallery.made')} {loop?.clip_count}</span>
           )}
         </div>
         {running && (
-          <p className="mt-2 text-[11px] text-amber-600">{t('gallery.keepOpen')}</p>
+          <p className="mt-2 text-[11px] text-emerald-600">{t('gallery.keepOpen')}</p>
         )}
-        {lastError && (
+        {loop?.last_error && (
           <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800 break-all">
-            {lastError} — {t('gallery.retrying')}
+            {loop.last_error} — {t('gallery.retrying')}
           </div>
         )}
       </div>

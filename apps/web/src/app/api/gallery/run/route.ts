@@ -12,9 +12,10 @@
 import { NextResponse } from 'next/server'
 
 import { DEMO_USER_ID } from '@/lib/demo-user'
-import { fetchNews } from '@/lib/news'
+import { fetchNewsSmart } from '@/lib/news'
 import { pipelineFetch } from '@/lib/pipeline-client'
 import { supabaseAdmin } from '@/lib/supabase-server'
+import { getSystemConfig } from '@/lib/system-config-server'
 
 type Body = {
   avatar_id?: string
@@ -42,10 +43,11 @@ export async function POST(request: Request) {
   const lang = ['th', 'zh', 'en'].includes(body.language ?? '') ? (body.language as string) : 'th'
   const duration = Math.max(10, Math.min(Number(body.duration_seconds) || 45, 300))
 
-  // ── 1. news ────────────────────────────────────────────────────────────────
+  // ── 1. news (Brave API when key set, else Google News RSS) ────────────────
   let articles
   try {
-    articles = await fetchNews(lang, body.topic?.trim() || undefined)
+    const cfg = await getSystemConfig()
+    ;({ articles } = await fetchNewsSmart(lang, body.topic?.trim() || undefined, cfg.brave_api_key))
   } catch (err) {
     return NextResponse.json({ error: `news fetch failed: ${err instanceof Error ? err.message : String(err)}` }, { status: 502 })
   }

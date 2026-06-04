@@ -18,6 +18,7 @@ export type SystemConfig = {
   default_duration: number
   fb_page_token: string      // Facebook Page access token (for reading live comments + posting replies)
   fb_live_video_id: string   // Facebook live video id to poll comments from
+  brave_api_key: string      // Brave Search API key for gallery news fetch (blank = Google News RSS)
 }
 
 export const SYSTEM_CONFIG_DEFAULTS: SystemConfig = {
@@ -38,4 +39,15 @@ export const SYSTEM_CONFIG_DEFAULTS: SystemConfig = {
   default_duration: 30,
   fb_page_token: '',
   fb_live_video_id: '',
+  brave_api_key: '',
+}
+
+// Preview-mask an API key for display: keep the last 5 chars, hide the rest
+// with ***; when more than 10 chars are hidden, prefix the hidden count.
+//   'abc12345678901234' → '(12)***34567' ;  'short1' → '***hort1'
+export function maskKey(v: string): string {
+  if (!v) return ''
+  const tail = v.slice(-5)
+  const hidden = Math.max(0, v.length - tail.length)
+  return (hidden > 10 ? `(${hidden})***` : '***') + tail
 }

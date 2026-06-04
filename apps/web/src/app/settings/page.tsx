@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useI18n } from '@/components/LocaleProvider'
+import { KeyInput } from '@/components/KeyInput'
 import type { SystemConfig } from '@/lib/system-config'
 import { SYSTEM_CONFIG_DEFAULTS as DEFAULTS } from '@/lib/system-config'
 
@@ -111,9 +112,10 @@ export default function SettingsPage() {
             <div className="space-y-3 rounded-md border border-border/70 bg-muted/30 p-3">
               <div className="space-y-1.5">
                 <Label>{t('set.tts.azureKey')}</Label>
-                <Input type="password" autoComplete="off" placeholder={t('set.tts.azureKeyPh')}
+                <KeyInput placeholder={t('set.tts.azureKeyPh')}
+                  changeLabel={t('set.key.change')} cancelLabel={t('set.key.cancel')}
                   value={cfg.azure_speech_key ?? ''}
-                  onChange={e => setCfg(p => ({ ...p, azure_speech_key: e.target.value.trim() }))} />
+                  onChange={v => setCfg(p => ({ ...p, azure_speech_key: v }))} />
                 <p className="text-xs text-muted-foreground">{t('set.tts.azureKeyHint')}</p>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -167,10 +169,10 @@ export default function SettingsPage() {
           </div>
           <div className="space-y-1.5">
             <Label>{t('set.fb.token')}</Label>
-            <Input type="password" autoComplete="off"
-              placeholder={t('set.fb.tokenPh')}
+            <KeyInput placeholder={t('set.fb.tokenPh')}
+              changeLabel={t('set.key.change')} cancelLabel={t('set.key.cancel')}
               value={cfg.fb_page_token ?? ''}
-              onChange={e => setCfg(p => ({ ...p, fb_page_token: e.target.value.trim() }))} />
+              onChange={v => setCfg(p => ({ ...p, fb_page_token: v }))} />
             <p className="text-xs text-muted-foreground">{t('set.fb.tokenHint')}</p>
           </div>
           <div className="space-y-1.5">
@@ -180,6 +182,23 @@ export default function SettingsPage() {
             <p className="text-xs text-muted-foreground">{t('set.fb.videoIdHint')}</p>
           </div>
           <p className="text-xs text-emerald-700">{cfg.fb_page_token ? t('set.fb.tokenSet') : t('set.fb.tokenUnset')}</p>
+        </section>
+
+        {/* ── News API (Brave) — gallery auto news clips ───────────────── */}
+        <section className="rounded-lg border p-5 space-y-4">
+          <div>
+            <h2 className="text-sm font-semibold">{t('set.news.title')}</h2>
+            <p className="text-xs text-muted-foreground">{t('set.news.desc')}</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t('set.news.key')}</Label>
+            <KeyInput placeholder={t('set.news.keyPh')}
+              changeLabel={t('set.key.change')} cancelLabel={t('set.key.cancel')}
+              value={cfg.brave_api_key ?? ''}
+              onChange={v => setCfg(p => ({ ...p, brave_api_key: v }))} />
+            <p className="text-xs text-muted-foreground">{t('set.news.keyHint')}</p>
+          </div>
+          <p className="text-xs text-emerald-700">{cfg.brave_api_key ? t('set.news.keySet') : t('set.news.keyUnset')}</p>
         </section>
 
         {/* ── Lip-sync service ─────────────────────────────────────────── */}
