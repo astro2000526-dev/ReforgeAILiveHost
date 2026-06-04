@@ -7,13 +7,41 @@
 resolver 127.0.0.11 valid=10s ipv6=off;
 
 # ── Status page (default vhost) ─────────────────────────────────────────────
+# Root serves the in-app /status page (resources + tasks, web container).
+# When web is down — exactly when you need status most — nginx falls back to
+# the static page genstatus.sh keeps writing (@static).
 server {
     listen 80 default_server;
     server_name status.${HOST_IP}.nip.io _;
     client_max_body_size 300m;
-    root /usr/share/nginx/html/status;
-    index index.html;
-    location / { try_files $uri $uri/ =404; }
+
+    location = / {
+        set $web http://web:3000;
+        proxy_pass $web/status;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        error_page 502 503 504 = @static;
+    }
+
+    # /_next assets, /api/system/status, and in-app navigation off the page.
+    location / {
+        set $web http://web:3000;
+        proxy_pass $web;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+        error_page 502 503 504 = @static;
+    }
+
+    location @static {
+        root /usr/share/nginx/html/status;
+        try_files /index.html =404;
+    }
 }
 
 # ── API: pipeline + rendered files + lipsync ────────────────────────────────

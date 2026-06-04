@@ -66,6 +66,16 @@ def stop_stream(stream_id: str) -> bool:
     return True
 
 
+def list_streams() -> list[dict]:
+    """Snapshot of every tracked ffmpeg push — consumed by /system/status."""
+    out = []
+    for sid in list(_streams):
+        s = stream_status(sid)
+        if s:
+            out.append(s)
+    return out
+
+
 def stream_status(stream_id: str) -> Optional[dict]:
     handle = _streams.get(stream_id)
     if not handle:

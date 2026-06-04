@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import secrets
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -28,7 +29,7 @@ from .schemas import (
     StreamStartRequest,
     StreamStatus,
 )
-from .streaming import start_stream, stop_stream, stream_status
+from .streaming import list_streams, start_stream, stop_stream, stream_status
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("pipeline")
@@ -993,3 +994,108 @@ async def stream_status_endpoint(stream_id: str):
     if not s:
         raise HTTPException(404, "unknown stream")
     return s
+
+
+# --- System status: resources + all task state -------------------------------
+# Consumed by the web /status page (proxied via /api/system/status). All the
+# resource readers are best-effort: /proc/* exists in the Linux container,
+# nvidia-smi only on the GPU box — each falls back to None/[] so the same
+# code runs on the Mac no-GPU deploy.
+
+def _read_proc_cpu() -> tuple[int, int] | None:
+    """(busy, total) jiffies from the aggregate cpu line of /proc/stat."""
+    try:
+        nums = [int(p) for p in Path("/proc/stat").read_text().splitlines()[0].split()[1:]]
+        total = sum(nums)
+        idle = nums[3] + (nums[4] if len(nums) > 4 else 0)  # idle + iowait
+        return total - idle, total
+    except Exception:
+        return None
+
+
+async def _cpu_percent() -> float | None:
+    a = _read_proc_cpu()
+    if not a:
+        return None
+    await asyncio.sleep(0.25)
+    b = _read_proc_cpu()
+    if not b:
+        return None
+    busy, total = b[0] - a[0], b[1] - a[1]
+    return round(busy / total * 100, 1) if total > 0 else None
+
+
+def _mem_info() -> dict | None:
+    """MemTotal/MemAvailable from /proc/meminfo (kB → bytes)."""
+    try:
+        info: dict[str, int] = {}
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            k, v = line.split(":", 1)
+            info[k.strip()] = int(v.strip().split()[0]) * 1024
+        total = info["MemTotal"]
+        avail = info.get("MemAvailable", info.get("MemFree", 0))
+        return {
+            "total_bytes": total,
+            "used_bytes": total - avail,
+            "percent": round((total - avail) / total * 100, 1),
+        }
+    except Exception:
+        return None
+
+
+def _gpu_info() -> list[dict]:
+    try:
+        r = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True, text=True, timeout=5,
+        )
+        if r.returncode != 0:
+            return []
+        gpus = []
+        for line in r.stdout.strip().splitlines():
+            name, util, mem_used, mem_total, temp = [p.strip() for p in line.split(",")]
+            gpus.append({
+                "name": name,
+                "util_percent": float(util),
+                "mem_used_mb": float(mem_used),
+                "mem_total_mb": float(mem_total),
+                "temp_c": float(temp),
+            })
+        return gpus
+    except Exception:
+        return []
+
+
+@app.get("/system/status", dependencies=[Depends(verify_pipeline_token)])
+async def system_status():
+    try:
+        load = os.getloadavg()
+    except OSError:
+        load = None
+    disk = shutil.disk_usage(OUTPUT_DIR)
+    return {
+        "ok": True,
+        "resources": {
+            "cpu": {
+                "percent": await _cpu_percent(),
+                "cores": os.cpu_count(),
+                "load_1m": round(load[0], 2) if load else None,
+            },
+            "memory": _mem_info(),
+            "disk": {
+                "total_bytes": disk.total,
+                "used_bytes": disk.used,
+                "percent": round(disk.used / disk.total * 100, 1),
+            },
+            "gpus": _gpu_info(),
+        },
+        "tasks": {
+            "render_jobs": _render_jobs,
+            "generation_jobs": _jobs,
+            "streams": list_streams(),
+        },
+    }
