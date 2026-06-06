@@ -4,6 +4,7 @@
 
 import { DEMO_USER_ID } from '@/lib/demo-user'
 import { pipelineFetch } from '@/lib/pipeline-client'
+import { latestGeneration } from '@/lib/server/latest-generation'
 import { supabaseAdmin } from '@/lib/supabase-server'
 
 export type RenderStatus = {
@@ -34,13 +35,7 @@ export async function getRenderStatus(
 
   if (terminal) {
     // mirror into DB (best-effort)
-    const { data: gen } = await supabaseAdmin
-      .from('generations')
-      .select('id, status')
-      .eq('project_id', id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    const gen = await latestGeneration(id)
     if (gen && !['done', 'failed'].includes(gen.status)) {
       await supabaseAdmin
         .from('generations')

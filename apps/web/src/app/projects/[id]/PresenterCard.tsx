@@ -6,14 +6,9 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useI18n } from '@/components/LocaleProvider'
+import type { Avatar as AvatarRow } from '@/lib/types'
 
-type Avatar = {
-  id: string
-  name: string | null
-  preview_image_url: string | null
-  region: string | null
-  gender: string | null
-}
+type Avatar = Pick<AvatarRow, 'id' | 'name' | 'preview_image_url' | 'region' | 'gender'>
 
 export function PresenterCard({
   projectId,

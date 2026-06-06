@@ -19,6 +19,10 @@ export type SystemConfig = {
   fb_page_token: string      // Facebook Page access token (for reading live comments + posting replies)
   fb_live_video_id: string   // Facebook live video id to poll comments from
   brave_api_key: string      // Brave Search API key for gallery news fetch (blank = Google News RSS)
+  sovits_enabled: boolean    // GPT-SoVITS high-quality TTS (sovits-first chain); off = current TTS
+  sovits_url: string         // GPT-SoVITS HTTP service URL (blank = pipeline env default)
+  tts_pitch: number          // semitones -12..12 (sovits)
+  tts_emotion: string        // emotion tag (sovits, best-effort; blank = neutral)
 }
 
 export const SYSTEM_CONFIG_DEFAULTS: SystemConfig = {
@@ -40,6 +44,10 @@ export const SYSTEM_CONFIG_DEFAULTS: SystemConfig = {
   fb_page_token: '',
   fb_live_video_id: '',
   brave_api_key: '',
+  sovits_enabled: false,
+  sovits_url: '',
+  tts_pitch: 0,
+  tts_emotion: '',
 }
 
 // Preview-mask an API key for display: keep the last 5 chars, hide the rest

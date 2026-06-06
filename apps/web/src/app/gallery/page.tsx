@@ -1,24 +1,34 @@
 'use client'
 
-// /gallery — auto news-clip factory.
-// The generation loop runs SERVER-SIDE (lib/gallery-loop.ts): press Start and
-// close the tab — clips keep coming until someone presses Stop. This page is
-// just a remote control + viewer: it subscribes to /api/gallery/loop/stream
-// (SSE) so every open browser shows the same live on/off state, phase and
-// progress, no matter who started or stopped the loop.
+// /gallery — auto news-clip factory + full video library.
+//
+// TOP: control panel for the SERVER-SIDE news loop (lib/gallery-loop.ts). Press
+// Start and close the tab — clips keep coming until someone presses Stop. This
+// page subscribes to /api/gallery/loop/stream (SSE) so every open browser shows
+// the same live on/off state, phase and progress.
+//
+// BOTTOM: a categorized, searchable library of EVERY rendered clip for the demo
+// user (scope=all) — tabs by source/status, big modal player, download, open
+// project. New UI strings are hardcoded Thai by design; existing t() keys kept.
 
 import Link from 'next/link'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useI18n } from '@/components/LocaleProvider'
+import type { LoopState } from '@/lib/gallery-loop'
+import type { Avatar as AvatarRow } from '@/lib/types'
 
-type Avatar = { id: string; name: string; preview_image_url: string | null; template_video_url: string | null }
+type Avatar = Pick<AvatarRow, 'id' | 'name' | 'preview_image_url' | 'template_video_url'>
+
+// scope=all shape from /api/gallery/clips
 type Clip = {
   project_id: string
   title: string
+  project_name: string
+  source: 'auto-news' | 'manual'
   news_link: string | null
   news_source: string | null
   created_at: string
@@ -26,21 +36,25 @@ type Clip = {
   progress: number
   video_url: string | null
 }
-type LoopState = {
-  running: boolean
-  phase: 'idle' | 'news' | 'render' | 'cooldown'
-  current_title: string | null
-  render_pct: number
-  clip_count: number
-  last_error: string | null
-  started_at: string | null
-  settings: {
-    avatar_id: string
-    language: string
-    product?: string
-    topic?: string
-    duration_seconds: number
-  } | null
+
+type TabKey = 'all' | 'auto-news' | 'manual' | 'rendering'
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'all', label: 'ทั้งหมด' },
+  { key: 'auto-news', label: 'จากข่าวอัตโนมัติ' },
+  { key: 'manual', label: 'สร้างเอง' },
+  { key: 'rendering', label: 'กำลังเรนเดอร์' },
+]
+
+const EMPTY_BY_TAB: Record<TabKey, string> = {
+  all: 'ยังไม่มีวิดีโอ — กดเริ่มสร้างคลิปข่าว หรือสร้างโปรเจกต์ใหม่',
+  'auto-news': 'ยังไม่มีคลิปจากข่าวอัตโนมัติ — กดเริ่มสร้างด้านบน',
+  manual: 'ยังไม่มีวิดีโอที่สร้างเอง',
+  rendering: 'ตอนนี้ไม่มีวิดีโอที่กำลังเรนเดอร์',
+}
+
+function isRendering(c: Clip): boolean {
+  return c.status !== 'done' && c.status !== 'failed'
 }
 
 export default function GalleryPage() {
@@ -59,9 +73,14 @@ export default function GalleryPage() {
   const clipCountRef = useRef(-1)
   const seededRef = useRef(false)
 
+  // library controls
+  const [tab, setTab] = useState<TabKey>('all')
+  const [search, setSearch] = useState('')
+  const [player, setPlayer] = useState<Clip | null>(null)
+
   const loadClips = useCallback(async () => {
     try {
-      const r = await fetch('/api/gallery/clips', { cache: 'no-store' })
+      const r = await fetch('/api/gallery/clips?scope=all', { cache: 'no-store' })
       const d = (await r.json()) as { clips?: Clip[] }
       setClips(d.clips ?? [])
     } finally {
@@ -105,6 +124,16 @@ export default function GalleryPage() {
     return () => es.close()
   }, [loadClips])
 
+  // close modal on Escape
+  useEffect(() => {
+    if (!player) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPlayer(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [player])
+
   async function send(body: Record<string, unknown>) {
     setBusy(true)
     try {
@@ -130,6 +159,28 @@ export default function GalleryPage() {
     cooldown: t('gallery.phase.cooldown'),
   }
 
+  // counts per tab (for badges)
+  const counts = useMemo(() => {
+    const c = { all: clips.length, 'auto-news': 0, manual: 0, rendering: 0 }
+    for (const clip of clips) {
+      if (clip.source === 'auto-news') c['auto-news'] += 1
+      else c.manual += 1
+      if (isRendering(clip)) c.rendering += 1
+    }
+    return c
+  }, [clips])
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return clips.filter((c) => {
+      if (tab === 'auto-news' && c.source !== 'auto-news') return false
+      if (tab === 'manual' && c.source !== 'manual') return false
+      if (tab === 'rendering' && !isRendering(c)) return false
+      if (q && !c.project_name.toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [clips, tab, search])
+
   return (
     <main className="mx-auto max-w-5xl px-6 py-12">
       <header className="mb-8">
@@ -152,7 +203,7 @@ export default function GalleryPage() {
         <p className="mt-1 text-sm text-muted-foreground">{t('gallery.subtitle')}</p>
       </header>
 
-      {/* ── control panel ── */}
+      {/* ── control panel (news loop) ── */}
       <div className="mb-8 rounded-lg border p-5">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-2">
@@ -233,49 +284,203 @@ export default function GalleryPage() {
         )}
       </div>
 
-      {/* ── clip grid ── */}
+      {/* ── video library ── */}
       <section>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-medium">{t('gallery.clips')}</h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-medium">คลังวิดีโอ</h2>
           <Button size="sm" variant="outline" onClick={loadClips}>↻ {t('gallery.refresh')}</Button>
         </div>
+
+        {/* tabs */}
+        <div className="mb-4 flex flex-wrap gap-2">
+          {TABS.map((tb) => {
+            const active = tab === tb.key
+            return (
+              <button
+                key={tb.key}
+                onClick={() => setTab(tb.key)}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                  active
+                    ? 'border-foreground bg-foreground text-background'
+                    : 'border-border bg-background text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {tb.label}
+                <span className={`rounded-full px-1.5 text-[10px] ${active ? 'bg-background/20' : 'bg-muted'}`}>
+                  {counts[tb.key]}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* search */}
+        <div className="mb-5">
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="ค้นหาตามชื่อวิดีโอ…"
+            className="max-w-sm"
+          />
+        </div>
+
         {loadingClips ? (
           <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
-        ) : clips.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t('gallery.empty')}</p>
+        ) : visible.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {search.trim() ? 'ไม่พบวิดีโอที่ตรงกับคำค้นหา' : EMPTY_BY_TAB[tab]}
+          </p>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
-            {clips.map((c) => (
-              <div key={c.project_id} className="rounded-lg border p-3 hover:bg-muted/30 transition-colors">
-                {c.video_url ? (
-                  <video src={c.video_url} controls preload="metadata" className="mb-2 aspect-video w-full rounded-md bg-black object-contain" />
-                ) : (
-                  <div className="mb-2 flex aspect-video w-full flex-col items-center justify-center gap-1 rounded-md bg-muted text-muted-foreground">
-                    <span className="text-2xl">{c.status === 'failed' ? '⚠️' : '⏳'}</span>
-                    <span className="text-xs">
-                      {c.status === 'failed' ? t('gallery.clipFailed') : `${t('gallery.rendering')} ${c.progress}%`}
-                    </span>
-                  </div>
-                )}
-                <p className="text-sm font-medium line-clamp-2">{c.title}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {c.news_source ? `${c.news_source} · ` : ''}{new Date(c.created_at).toLocaleString()}
-                </p>
-                <div className="mt-2 flex gap-2">
-                  <Link href={`/projects/${c.project_id}`} className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
-                    {t('gallery.openProject')}
-                  </Link>
-                  {c.news_link && (
-                    <a href={c.news_link} target="_blank" rel="noreferrer" className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
-                      {t('gallery.sourceLink')}
-                    </a>
-                  )}
-                </div>
-              </div>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+            {visible.map((c) => (
+              <ClipCard key={c.project_id} clip={c} onPlay={() => setPlayer(c)} />
             ))}
           </div>
         )}
       </section>
+
+      {player && <PlayerModal clip={player} onClose={() => setPlayer(null)} />}
     </main>
+  )
+}
+
+function SourceBadge({ source }: { source: Clip['source'] }) {
+  const auto = source === 'auto-news'
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+        auto
+          ? 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300'
+          : 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300'
+      }`}
+    >
+      {auto ? 'ข่าวอัตโนมัติ' : 'สร้างเอง'}
+    </span>
+  )
+}
+
+function ClipCard({ clip, onPlay }: { clip: Clip; onPlay: () => void }) {
+  const failed = clip.status === 'failed'
+
+  return (
+    <div className="flex flex-col rounded-lg border p-3 transition-colors hover:bg-muted/30">
+      {clip.video_url ? (
+        <button
+          onClick={onPlay}
+          className="group relative mb-2 block aspect-video w-full overflow-hidden rounded-md bg-black"
+          aria-label="เล่นวิดีโอ"
+        >
+          <video src={clip.video_url} preload="metadata" muted playsInline className="h-full w-full object-contain" />
+          <span className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/90 text-lg text-black">▶</span>
+          </span>
+        </button>
+      ) : (
+        <div className="mb-2 flex aspect-video w-full flex-col items-center justify-center gap-1.5 rounded-md bg-muted px-3 text-muted-foreground">
+          <span className="text-2xl">{failed ? '⚠️' : '⏳'}</span>
+          {failed ? (
+            <span className="text-xs">เรนเดอร์ล้มเหลว</span>
+          ) : (
+            <>
+              <span className="text-xs">กำลังเรนเดอร์ {clip.progress}%</span>
+              <div className="h-1.5 w-full max-w-[80%] overflow-hidden rounded-full bg-muted-foreground/20">
+                <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${Math.max(4, clip.progress)}%` }} />
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      <div className="flex items-start justify-between gap-2">
+        <p className="line-clamp-2 text-sm font-medium">{clip.project_name}</p>
+        <SourceBadge source={clip.source} />
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {clip.news_source ? `${clip.news_source} · ` : ''}{new Date(clip.created_at).toLocaleString()}
+      </p>
+
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+        {clip.video_url && (
+          <>
+            <button onClick={onPlay} className="font-medium text-foreground hover:underline">▶ เล่น</button>
+            <a
+              href={clip.video_url}
+              download
+              className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              ⬇ ดาวน์โหลด
+            </a>
+          </>
+        )}
+        <Link
+          href={`/projects/${clip.project_id}`}
+          className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+        >
+          🔗 เปิดโปรเจกต์
+        </Link>
+        {clip.news_link && (
+          <a
+            href={clip.news_link}
+            target="_blank"
+            rel="noreferrer"
+            className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            ข่าวต้นทาง
+          </a>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function PlayerModal({ clip, onClose }: { clip: Clip; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-0 sm:p-6"
+      onClick={onClose}
+    >
+      <div
+        className="relative flex h-full w-full flex-col bg-black sm:h-auto sm:max-h-[90vh] sm:max-w-3xl sm:rounded-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 px-4 py-3 text-white">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{clip.project_name}</p>
+            <p className="truncate text-xs text-white/60">
+              {clip.news_source ? `${clip.news_source} · ` : ''}{new Date(clip.created_at).toLocaleString()}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="ปิด"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="flex flex-1 items-center justify-center overflow-hidden bg-black">
+          {clip.video_url && (
+            <video
+              src={clip.video_url}
+              controls
+              autoPlay
+              playsInline
+              className="max-h-full max-w-full"
+            />
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4 px-4 py-3 text-sm text-white/90">
+          {clip.video_url && (
+            <a href={clip.video_url} download className="hover:underline">⬇ ดาวน์โหลด</a>
+          )}
+          <Link href={`/projects/${clip.project_id}`} className="hover:underline">🔗 เปิดโปรเจกต์</Link>
+          {clip.news_link && (
+            <a href={clip.news_link} target="_blank" rel="noreferrer" className="hover:underline">ข่าวต้นทาง</a>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }

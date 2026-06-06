@@ -6,40 +6,13 @@
 
 import { NextResponse } from 'next/server'
 import type { SystemConfig } from '@/lib/system-config'
-import { SYSTEM_CONFIG_DEFAULTS } from '@/lib/system-config'
-
-export type { SystemConfig }
-export { SYSTEM_CONFIG_DEFAULTS }
+import { gwHeaders, gwUrl } from '@/lib/server/db-gateway'
+import { getSystemConfig } from '@/lib/system-config-server'
 
 const CONFIG_KEY = 'system_config_v1'
-// PostgREST gateway base. In the compose deploy the web container reaches it as
-// http://nginx:8088 (via NEXT_PUBLIC_SUPABASE_URL); host-net deploy uses
-// 127.0.0.1:8088. Read from env so it works in both, with a safe fallback.
-const GW = ((process.env.SUPABASE_GATEWAY_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:8088').replace(/\/+$/, '')) + '/rest/v1'
-const SVC_KEY = process.env.SUPABASE_SERVICE_KEY ?? ''
-
-function gwHeaders() {
-  return { Authorization: `Bearer ${SVC_KEY}`, apikey: SVC_KEY, 'Content-Type': 'application/json' }
-}
-
-async function readConfig(): Promise<SystemConfig> {
-  try {
-    const r = await fetch(
-      `${GW}/system_config?key=eq.${CONFIG_KEY}&select=value&limit=1`,
-      { headers: gwHeaders(), cache: 'no-store', signal: AbortSignal.timeout(4000) }
-    )
-    if (!r.ok) return SYSTEM_CONFIG_DEFAULTS
-    const rows = (await r.json()) as { value: Partial<SystemConfig> }[]
-    // merge over defaults so a row written before newer fields existed never
-    // leaves a field undefined (callers do e.g. cfg.playback_speed.toFixed()).
-    return { ...SYSTEM_CONFIG_DEFAULTS, ...(rows[0]?.value ?? {}) }
-  } catch {
-    return SYSTEM_CONFIG_DEFAULTS
-  }
-}
 
 export async function GET() {
-  const config = await readConfig()
+  const config = await getSystemConfig()
   return NextResponse.json({ config })
 }
 
@@ -51,12 +24,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'invalid JSON' }, { status: 400 })
   }
 
-  const current = await readConfig()
+  const current = await getSystemConfig()
   const merged: SystemConfig = { ...current, ...body }
 
-  const r = await fetch(`${GW}/system_config`, {
+  const r = await fetch(gwUrl('/system_config'), {
     method: 'POST',
-    headers: { ...gwHeaders(), Prefer: 'resolution=merge-duplicates' },
+    headers: { ...gwHeaders(), 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
     body: JSON.stringify({ key: CONFIG_KEY, value: merged, updated_at: new Date().toISOString() }),
     signal: AbortSignal.timeout(5000),
   })

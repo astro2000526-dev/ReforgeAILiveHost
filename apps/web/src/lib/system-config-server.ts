@@ -5,19 +5,16 @@
 import 'server-only'
 import type { SystemConfig } from '@/lib/system-config'
 import { SYSTEM_CONFIG_DEFAULTS } from '@/lib/system-config'
+import { gwHeaders, gwUrl } from '@/lib/server/db-gateway'
 
 const CONFIG_KEY = 'system_config_v1'
-const GW =
-  ((process.env.SUPABASE_GATEWAY_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:8088').replace(/\/+$/, '')) +
-  '/rest/v1'
-const SVC_KEY = process.env.SUPABASE_SERVICE_KEY ?? ''
 
 export async function getSystemConfig(): Promise<SystemConfig> {
   try {
     const r = await fetch(
-      `${GW}/system_config?key=eq.${CONFIG_KEY}&select=value&limit=1`,
+      gwUrl(`/system_config?key=eq.${CONFIG_KEY}&select=value&limit=1`),
       {
-        headers: { Authorization: `Bearer ${SVC_KEY}`, apikey: SVC_KEY },
+        headers: gwHeaders(),
         cache: 'no-store',
         signal: AbortSignal.timeout(4000),
       }

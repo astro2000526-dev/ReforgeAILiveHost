@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { DEMO_USER_ID } from '@/lib/demo-user'
+import { getLiveLoopState } from '@/lib/live-loop'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { getLocale } from '@/lib/locale-server'
 import { translate, type Locale } from '@/lib/i18n'
@@ -43,6 +44,9 @@ export default async function DashboardPage() {
     draft: list.filter((p) => p.status === 'draft').length,
   }
 
+  // Live Console summary — read the shared server-side loop state directly.
+  const live = getLiveLoopState()
+
   return (
     <main className="mx-auto max-w-5xl px-6 py-12">
       <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -72,6 +76,25 @@ export default async function DashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* Live สด — server-side 24/7 loop summary */}
+      <Link href="/live" className="mb-8 block">
+        <div className="flex flex-wrap items-center gap-4 rounded-xl border bg-card p-4 transition-colors hover:bg-muted/40">
+          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${live.running ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-100 text-zinc-600'}`}>
+            {live.running ? '🔴 กำลังไลฟ์' : '⚫ ไลฟ์หยุดอยู่'}
+          </span>
+          <div className="text-sm">
+            <span className="font-semibold">Live สด</span>
+            <span className="ml-2 text-muted-foreground">
+              {live.running
+                ? `ตอบ FB ${live.replied_count} · พูดตอบ ${live.spoken_count} · บัฟเฟอร์ ${Math.round(live.buffered_seconds)} วิ`
+                : 'เปิด Live Console เพื่อเริ่มไลฟ์ AI 24/7'}
+            </span>
+          </div>
+          {live.last_error && <span className="text-xs text-destructive">⚠ {live.last_error}</span>}
+          <span className="ml-auto text-xs font-mono uppercase tracking-widest text-muted-foreground">เปิด Console →</span>
+        </div>
+      </Link>
 
       {error ? (
         <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">

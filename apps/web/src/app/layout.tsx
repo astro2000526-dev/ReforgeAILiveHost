@@ -47,11 +47,18 @@ export default async function RootLayout({
             __html: `(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':matchMedia('(prefers-color-scheme:dark)').matches;if(d)document.documentElement.classList.add('dark');}catch(e){}})();`,
           }}
         />
+        {/* Apply saved appearance (font / size / density) before paint — keep in
+            sync with lib/appearance.ts. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var pad={compact:'0.75rem',normal:'1.5rem',relaxed:'2.5rem'};var a=JSON.parse(localStorage.getItem('reforge_appearance')||'{}');var r=document.documentElement;if(a.fontScale)r.style.setProperty('--app-font-scale',String(a.fontScale));r.style.setProperty('--app-density-pad',pad[a.density]||pad.normal);r.setAttribute('data-font',a.font||'default');}catch(e){}})();`,
+          }}
+        />
       </head>
       <body className="min-h-full flex flex-col">
         <LocaleProvider initialLocale={locale}>
           <AppHeader />
-          {children}
+          <div className="app-density flex flex-1 flex-col">{children}</div>
         </LocaleProvider>
       </body>
     </html>

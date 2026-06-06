@@ -9,6 +9,8 @@
 
 import 'server-only'
 
+import { gwHeaders, gwUrl } from '@/lib/server/db-gateway'
+
 export type LoopSettings = {
   avatar_id: string
   language: string
@@ -31,10 +33,6 @@ export type LoopState = {
 }
 
 const STATE_KEY = 'gallery_loop_v1'
-const GW =
-  ((process.env.SUPABASE_GATEWAY_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:8088').replace(/\/+$/, '')) +
-  '/rest/v1'
-const SVC_KEY = process.env.SUPABASE_SERVICE_KEY ?? ''
 // the Next server itself — self-fetch keeps all logic in the existing routes
 const SELF = `http://127.0.0.1:${process.env.PORT || 3000}`
 
@@ -70,11 +68,10 @@ const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms))
 
 async function persist(running: boolean, settings: LoopSettings | null): Promise<void> {
   try {
-    await fetch(`${GW}/system_config`, {
+    await fetch(gwUrl('/system_config'), {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${SVC_KEY}`,
-        apikey: SVC_KEY,
+        ...gwHeaders(),
         'Content-Type': 'application/json',
         Prefer: 'resolution=merge-duplicates',
       },
@@ -88,8 +85,8 @@ async function persist(running: boolean, settings: LoopSettings | null): Promise
 
 async function readPersisted(): Promise<{ running?: boolean; settings?: LoopSettings } | null> {
   try {
-    const r = await fetch(`${GW}/system_config?key=eq.${STATE_KEY}&select=value&limit=1`, {
-      headers: { Authorization: `Bearer ${SVC_KEY}`, apikey: SVC_KEY },
+    const r = await fetch(gwUrl(`/system_config?key=eq.${STATE_KEY}&select=value&limit=1`), {
+      headers: gwHeaders(),
       cache: 'no-store',
       signal: AbortSignal.timeout(4000),
     })

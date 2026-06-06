@@ -130,7 +130,16 @@
     @apply font-sans;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    /* Appearance setting (per-device, localStorage 'reforge_appearance').
+       Scaling the root font-size rescales every rem in the app at once. */
+    font-size: calc(16px * var(--app-font-scale, 1));
   }
+
+  /* data-font selects the active family stack (set by lib/appearance.ts).
+     Falls back to the default Geist/Inter sans when unset. */
+  html[data-font='noto'] body { font-family: var(--font-heading), var(--font-sans), ui-sans-serif, system-ui, sans-serif; }
+  html[data-font='inter'] body { font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif; }
+  html[data-font='mono'] body { font-family: var(--font-mono), ui-monospace, SFMono-Regular, monospace; }
   /* Buttons default to the arrow cursor in browsers — make every enabled
      button / role=button show the clickable pointer. */
   button:not(:disabled),
@@ -168,4 +177,11 @@
   .dark video {
     filter: brightness(0.92) saturate(0.96);
   }
+}
+
+/* Padding-density utility (Appearance setting). Applied to the main app wrapper
+   in app/layout.tsx; --app-density-pad is set by lib/appearance.ts. */
+@utility app-density {
+  padding-top: var(--app-density-pad, 1.5rem);
+  padding-bottom: var(--app-density-pad, 1.5rem);
 }

@@ -5,6 +5,7 @@
 
 import { NextResponse } from 'next/server'
 import { postCommentReply } from '@/lib/facebook'
+import { noteReplied } from '@/lib/live-loop'
 import { getSystemConfig } from '@/lib/system-config-server'
 
 type Body = { commentId?: string; message?: string }
@@ -23,5 +24,6 @@ export async function POST(request: Request) {
   const res = await postCommentReply(commentId, message, token)
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status })
 
+  noteReplied() // bump live-loop session counter (no-op when loop idle)
   return NextResponse.json({ ok: true, id: res.data.id })
 }

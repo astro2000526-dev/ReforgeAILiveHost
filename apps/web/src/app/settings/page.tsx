@@ -9,10 +9,31 @@ import { useI18n } from '@/components/LocaleProvider'
 import { KeyInput } from '@/components/KeyInput'
 import type { SystemConfig } from '@/lib/system-config'
 import { SYSTEM_CONFIG_DEFAULTS as DEFAULTS } from '@/lib/system-config'
+import type { Appearance, AppFont, FontScale, Density } from '@/lib/appearance'
+import {
+  APPEARANCE_DEFAULTS,
+  applyAppearance,
+  loadAppearance,
+  saveAppearance,
+} from '@/lib/appearance'
 
 const TH_VOICES = ['th-TH-PremwadeeNeural', 'th-TH-NiwatNeural', 'th-TH-AcharaNeural']
 const ZH_VOICES = ['BV001_streaming', 'BV700_streaming', 'BV421_streaming']
 const EN_VOICES = ['en-US-JennyNeural', 'en-US-GuyNeural']
+
+// Appearance option metadata (hardcoded Thai — new strings, not via i18n).
+const FONT_OPTIONS: { id: AppFont; label: string; sample: string; css: string }[] = [
+  { id: 'default', label: 'มาตรฐาน', sample: 'Aa ก', css: 'var(--font-sans), sans-serif' },
+  { id: 'noto', label: 'Noto Sans', sample: 'Aa ก', css: 'var(--font-heading), sans-serif' },
+  { id: 'inter', label: 'Inter', sample: 'Aa', css: 'var(--font-sans), sans-serif' },
+  { id: 'mono', label: 'Mono', sample: 'Aa', css: 'var(--font-mono), monospace' },
+]
+const FONT_SCALES: FontScale[] = [0.875, 1, 1.125, 1.25]
+const DENSITY_OPTIONS: { id: Density; label: string }[] = [
+  { id: 'compact', label: 'แน่น' },
+  { id: 'normal', label: 'ปกติ' },
+  { id: 'relaxed', label: 'โปร่ง' },
+]
 
 export default function SettingsPage() {
   const { t } = useI18n()
@@ -23,6 +44,19 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<string | null>(null)
+  // Appearance lives in localStorage (per-device). Lazy-init reads it once on the
+  // client; the inline script in layout.tsx already applied it to the DOM pre-paint,
+  // so this only drives the controls' selected state.
+  const [appearance, setAppearance] = useState<Appearance>(loadAppearance)
+
+  function updateAppearance(next: Appearance) {
+    setAppearance(next)
+    saveAppearance(next)
+    applyAppearance(next)
+  }
+  function resetAppearance() {
+    updateAppearance(APPEARANCE_DEFAULTS)
+  }
 
   useEffect(() => {
     const ctrl = new AbortController()
@@ -50,9 +84,9 @@ export default function SettingsPage() {
   async function testLipsync() {
     setTesting(true); setTestResult(null)
     try {
-      const r = await fetch(`${cfg.lipsync_url}/health`, { signal: AbortSignal.timeout(5000) })
-      const d = (await r.json().catch(() => ({}))) as { ok?: boolean; status?: string }
-      setTestResult(r.ok ? `✓ connected · ${JSON.stringify(d)}` : `✗ HTTP ${r.status}`)
+      const r = await fetch('/api/system/lipsync-health')
+      const d = (await r.json().catch(() => ({}))) as { ok?: boolean; status?: number; error?: string }
+      setTestResult(d.ok ? `✓ connected · ${JSON.stringify(d)}` : `✗ HTTP ${d.status ?? r.status}`)
     } catch (err) {
       setTestResult(`✗ unreachable — ${err instanceof Error ? err.message : String(err)}`)
     } finally { setTesting(false) }
@@ -69,6 +103,61 @@ export default function SettingsPage() {
       </header>
 
       <div className="space-y-8">
+        {/* ── Appearance (per-device, localStorage — no DB) ────────────── */}
+        <section className="rounded-lg border p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold">การแสดงผล</h2>
+            <button type="button" onClick={resetAppearance}
+              className="text-xs text-muted-foreground hover:text-foreground underline">
+              รีเซ็ตค่าเริ่มต้น
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">เก็บในเครื่องนี้ (localStorage) — ไม่ถูกบันทึกลงเซิร์ฟเวอร์</p>
+
+          {/* Font family */}
+          <div className="space-y-2">
+            <Label>แบบอักษร</Label>
+            <div className="grid grid-cols-4 gap-2">
+              {FONT_OPTIONS.map(f => (
+                <button key={f.id} type="button"
+                  onClick={() => updateAppearance({ ...appearance, font: f.id })}
+                  className={`rounded-md border px-2 py-3 text-center transition-colors ${appearance.font === f.id ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'}`}>
+                  <span className="block text-lg leading-none" style={{ fontFamily: f.css }}>{f.sample}</span>
+                  <span className="mt-1.5 block text-[11px] text-muted-foreground">{f.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Font size */}
+          <div className="space-y-2">
+            <Label>ขนาดตัวอักษร — {Math.round(appearance.fontScale * 100)}%</Label>
+            <div className="grid grid-cols-4 gap-2">
+              {FONT_SCALES.map(s => (
+                <button key={s} type="button"
+                  onClick={() => updateAppearance({ ...appearance, fontScale: s })}
+                  className={`rounded-md border px-3 py-2 text-sm transition-colors ${appearance.fontScale === s ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'}`}>
+                  {Math.round(s * 100)}%
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Padding density */}
+          <div className="space-y-2">
+            <Label>ความหนาแน่น (ระยะขอบ)</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {DENSITY_OPTIONS.map(d => (
+                <button key={d.id} type="button"
+                  onClick={() => updateAppearance({ ...appearance, density: d.id })}
+                  className={`rounded-md border px-3 py-2 text-sm transition-colors ${appearance.density === d.id ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'}`}>
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* ── Render Mode ─────────────────────────────────────────────── */}
         <section className="rounded-lg border p-5 space-y-4">
           <h2 className="font-semibold">{t('set.render.title')}</h2>
@@ -155,6 +244,44 @@ export default function SettingsPage() {
               {cfg.voice_clone ? t('set.tts.cloneHint') : t('set.tts.originalHint')}
             </p>
           </div>
+        </section>
+
+        {/* ── GPT-SoVITS (high-quality TTS) ───────────────────────────── */}
+        <section className="rounded-lg border p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold">TTS คุณภาพสูง (GPT-SoVITS)</h2>
+              <p className="text-xs text-muted-foreground">เสียงสมจริงกว่า ปรับระดับเสียงสูง-ต่ำ และอารมณ์ได้</p>
+            </div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" className="h-4 w-4" checked={cfg.sovits_enabled}
+                onChange={e => setCfg(p => ({ ...p, sovits_enabled: e.target.checked }))} />
+              เปิดใช้งาน
+            </label>
+          </div>
+          {cfg.sovits_enabled && (
+            <>
+              <div className="space-y-1.5">
+                <Label>URL เซิร์ฟเวอร์ SoVITS</Label>
+                <Input placeholder="http://127.0.0.1:9880" value={cfg.sovits_url}
+                  onChange={e => setCfg(p => ({ ...p, sovits_url: e.target.value.trim() }))} />
+                <p className="text-xs text-muted-foreground">เว้นว่างไว้เพื่อใช้ค่า default ของ pipeline</p>
+              </div>
+              <div className="space-y-2">
+                <Label>ระดับเสียง (Pitch) — {cfg.tts_pitch > 0 ? `+${cfg.tts_pitch}` : cfg.tts_pitch} semitones</Label>
+                <input type="range" min={-12} max={12} step={1} value={cfg.tts_pitch}
+                  onChange={e => setCfg(p => ({ ...p, tts_pitch: Number(e.target.value) }))}
+                  className="w-full" />
+                <p className="text-xs text-muted-foreground">ลบ = เสียงต่ำลง · บวก = เสียงสูงขึ้น</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>อารมณ์ (Emotion)</Label>
+                <Input placeholder="เช่น happy, calm, excited" value={cfg.tts_emotion}
+                  onChange={e => setCfg(p => ({ ...p, tts_emotion: e.target.value }))} />
+                <p className="text-xs text-muted-foreground">เว้นว่าง = โทนปกติ (best-effort ขึ้นกับโมเดล)</p>
+              </div>
+            </>
+          )}
         </section>
 
         {/* ── Facebook Live (comment reading + auto-reply) ─────────────── */}

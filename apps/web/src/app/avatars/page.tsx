@@ -8,19 +8,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useI18n } from '@/components/LocaleProvider'
 import { UploadTile, compressImage, uploadFile } from '@/components/UploadTile'
-
-type Avatar = {
-  id: string
-  name: string
-  preview_image_url: string | null
-  template_video_url: string | null
-  region: string | null
-  gender: string | null
-  description: string | null
-  display_order?: number
-}
-
-const REGIONS = ['TH', 'ID', 'VN', 'MY', 'CN', 'EN']
+import { REGIONS } from '@/lib/constants'
+import type { Avatar } from '@/lib/types'
 
 // ─── inline form state (shared by create + edit) ─────────────────────────────
 function emptyForm(): FormState {
@@ -253,7 +242,7 @@ export default function AvatarsPage() {
                 >
                   {a.preview_image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={a.preview_image_url} alt={a.name} draggable={false} className="mb-2 aspect-[2/3] w-full rounded-md object-cover" />
+                    <img src={a.preview_image_url} alt={a.name ?? ''} draggable={false} className="mb-2 aspect-[2/3] w-full rounded-md object-cover" />
                   ) : (
                     <div className="mb-2 flex aspect-[2/3] w-full items-center justify-center rounded-md bg-muted text-3xl text-muted-foreground">🎭</div>
                   )}
