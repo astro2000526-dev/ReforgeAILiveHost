@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Inter, Noto_Sans } from "next/font/google";
+import { Fraunces, Geist, Geist_Mono, Inter, Noto_Sans } from "next/font/google";
 import "./globals.css";
 
 import { AppHeader } from "@/components/AppHeader";
@@ -10,6 +10,16 @@ import { cn } from "@/lib/utils";
 const notoSansHeading = Noto_Sans({subsets:['latin'],variable:'--font-heading'});
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
+
+// Fraunces — serif display font for the whole app's identity (headings via
+// globals.css h1/.font-display, and the landing which reads --font-fraunces).
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-fraunces",
+  display: "swap",
+});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,7 +47,7 @@ export default async function RootLayout({
   return (
     <html
       lang={HTML_LANG[locale] ?? "en"}
-      className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-sans", inter.variable, notoSansHeading.variable)}
+      className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-sans", inter.variable, notoSansHeading.variable, fraunces.variable)}
       suppressHydrationWarning
     >
       <head>

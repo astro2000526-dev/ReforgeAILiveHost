@@ -98,7 +98,7 @@ export function ScriptEditor({
             {genAi ? `🤖 ${t('av.saving')}` : `🤖 ${t('script.ai')}`}
           </Button>
         </div>
-        {error && <p className="text-xs text-red-600">{error}</p>}
+        {error && <p className="text-xs text-destructive">{error}</p>}
       </div>
     )
   }
@@ -109,7 +109,7 @@ export function ScriptEditor({
         <div key={i} className="rounded-md border p-2">
           <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
             <span className="font-medium uppercase tracking-wider">{t(`seg.${seg.type}`)}</span>
-            <button onClick={() => removeSeg(i)} className="text-red-500 hover:text-red-700">✕</button>
+            <button onClick={() => removeSeg(i)} className="text-destructive hover:opacity-70">✕</button>
           </div>
           <Textarea value={seg.text} onChange={(e) => update(i, e.target.value)} rows={2} />
         </div>
@@ -120,8 +120,8 @@ export function ScriptEditor({
         <Button size="sm" variant="ghost" onClick={() => { setSegments(initial); setEditing(false) }} disabled={saving}>{t('av.cancel')}</Button>
         <Button size="sm" disabled={saving} onClick={save}>{saving ? t('av.saving') : t('script.save')}</Button>
       </div>
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      {saved && <p className="text-xs text-emerald-600">✓</p>}
+      {error && <p className="text-xs text-destructive">{error}</p>}
+      {saved && <p className="text-xs text-success">✓</p>}
     </div>
   )
 }

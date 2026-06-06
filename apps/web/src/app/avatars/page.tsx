@@ -170,12 +170,12 @@ export default function AvatarsPage() {
         <div className="space-y-2">
           <Label>{t('av.image')} <span className="text-muted-foreground text-xs">({t('av.optional')})</span></Label>
           <UploadTile kind="image" url={form.imageUrl} localUrl={localImg} uploading={uploadingImg} emptyIcon="🎭" onPick={onPickImage} />
-          {form.imageUrl && !uploadingImg && <p className="text-xs text-emerald-600">{t('av.uploaded')}</p>}
+          {form.imageUrl && !uploadingImg && <p className="text-xs text-success">{t('av.uploaded')}</p>}
         </div>
         <div className="space-y-2">
           <Label>{t('av.video')} <span className="text-muted-foreground text-xs">({t('av.optional')})</span></Label>
           <UploadTile kind="video" url={form.videoUrl} localUrl={localVid} uploading={uploadingVid} emptyIcon="🎬" onPick={onPickVideo} />
-          {form.videoUrl && !uploadingVid && <p className="text-xs text-emerald-600 break-all">{t('av.uploaded')}</p>}
+          {form.videoUrl && !uploadingVid && <p className="text-xs text-success break-all">{t('av.uploaded')}</p>}
         </div>
       </div>
       <p className="text-[11px] text-muted-foreground">{t('av.videoHint')}</p>
@@ -185,7 +185,7 @@ export default function AvatarsPage() {
         <Textarea rows={3} value={form.details} onChange={e => setForm(p => ({ ...p, details: e.target.value }))} />
       </div>
 
-      {error && <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800 break-all">{error}</div>}
+      {error && <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive break-all">{error}</div>}
 
       <div className="flex gap-2">
         <Button className="flex-1" disabled={saving || uploadingImg || uploadingVid || !form.name.trim()} onClick={save}>
@@ -249,8 +249,8 @@ export default function AvatarsPage() {
                   <p className="text-sm font-medium truncate">{a.name}</p>
                   <p className="text-xs text-muted-foreground">{a.region ?? '?'} · {a.gender ?? '?'}</p>
                   {a.template_video_url
-                    ? <p className="mt-1 text-[11px] text-emerald-600">● {t('av.hasVideo')}</p>
-                    : <p className="mt-1 text-[11px] text-amber-600">○ {t('av.noVideo')}</p>
+                    ? <p className="mt-1 text-[11px] text-success">● {t('av.hasVideo')}</p>
+                    : <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">○ {t('av.noVideo')}</p>
                   }
                   {a.description && <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{a.description}</p>}
                   <div className="mt-3 flex gap-1.5">
@@ -258,7 +258,7 @@ export default function AvatarsPage() {
                       className="flex-1 inline-flex items-center justify-center rounded-md border px-2 py-1 text-xs hover:bg-muted">
                       {t('av.edit')}
                     </Link>
-                    <Button size="sm" variant="ghost" className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50"
+                    <Button size="sm" variant="ghost" className="text-xs text-destructive hover:bg-destructive/10"
                       disabled={deleting === a.id} onClick={() => deactivate(a.id)}>
                       {deleting === a.id ? '…' : '✕'}
                     </Button>

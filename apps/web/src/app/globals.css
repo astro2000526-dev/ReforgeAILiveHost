@@ -10,6 +10,14 @@
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-heading);
+  --font-display: var(--font-fraunces);
+  /* Brand semantic colors — usable as bg-success / text-live / etc. */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-live: var(--live);
+  --color-live-foreground: var(--live-foreground);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,74 +57,91 @@
 }
 
 :root {
-  /* Luxury light: warm off-white paper, refined ink, deep-indigo accent. */
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.508 0.118 165.612);
-  --primary-foreground: oklch(0.979 0.021 166.113);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /* ── Reforge AI Live — LIGHT (cream paper + ink text + gold accent) ──
+     Matches the landing's gold/ink identity but on a warm paper canvas. */
+  --background: #fbf8f1;            /* paper */
+  --foreground: #0a1a36;           /* ink */
+  --card: #f7f3ea;                 /* bone */
+  --card-foreground: #0a1a36;
+  --popover: #fbf8f1;
+  --popover-foreground: #0a1a36;
+  --primary: #c69841;              /* gold-500 */
+  --primary-foreground: #050f24;   /* deep ink reads on gold */
+  --secondary: #f0ead9;           /* warm bone, slightly deeper than card */
+  --secondary-foreground: #0e2240;
+  --muted: #f1ece0;
+  --muted-foreground: #5b6b85;     /* ink-tinted gray, readable on paper */
+  --accent: #f3e9cf;              /* faint gold wash */
+  --accent-foreground: #6b4f15;    /* deep gold-brown reads on the wash */
+  --destructive: #dc2626;          /* coral/live red */
+  --border: #e6ddc8;              /* warm hairline */
+  --input: #e6ddc8;
+  --ring: #c69841;
+  --chart-1: #c69841;
+  --chart-2: #3fa176;
+  --chart-3: #2a578c;
+  --chart-4: #d4a24c;
+  --chart-5: #0a1a36;
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.596 0.145 163.225);
-  --sidebar-primary-foreground: oklch(0.979 0.021 166.113);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --sidebar: #f7f3ea;
+  --sidebar-foreground: #0a1a36;
+  --sidebar-primary: #c69841;
+  --sidebar-primary-foreground: #050f24;
+  --sidebar-accent: #f3e9cf;
+  --sidebar-accent-foreground: #6b4f15;
+  --sidebar-border: #e6ddc8;
+  --sidebar-ring: #c69841;
+
+  /* Brand semantic tokens */
+  --success: #2f8a63;              /* jade, contrast-safe on paper */
+  --success-foreground: #ffffff;
+  --live: #dc2626;                 /* coral live red */
+  --live-foreground: #ffffff;
+  --gold: #c69841;                 /* gold-500 */
+  --gold-soft: #d4a24c;            /* gold-400 (brighter accent) */
 }
 
 .dark {
-  /* Luxury dark: deep blue-charcoal, soft ink, luminous indigo accent. */
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.432 0.095 166.913);
-  --primary-foreground: oklch(0.979 0.021 166.113);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.696 0.17 162.48);
-  --sidebar-primary-foreground: oklch(0.262 0.051 172.552);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* ── Reforge AI Live — DARK (ink navy + gold accent), same feel as landing ── */
+  --background: #050f24;           /* ink-950 */
+  --foreground: #f4f6fb;
+  --card: #0e2240;                 /* ink-850 */
+  --card-foreground: #f4f6fb;
+  --popover: #0a1a36;              /* ink-900 */
+  --popover-foreground: #f4f6fb;
+  --primary: #d4a24c;              /* gold-400 — luminous on ink */
+  --primary-foreground: #050f24;   /* deep ink reads on gold */
+  --secondary: #112847;           /* ink-800 */
+  --secondary-foreground: #f4f6fb;
+  --muted: #0e2240;
+  --muted-foreground: #93a4c2;     /* cool blue-gray, readable on ink */
+  --accent: #1a3a66;              /* ink-700, faint blue lift */
+  --accent-foreground: #f5dda0;    /* gold-200 reads on the blue */
+  --destructive: #f04444;          /* brighter coral for dark bg */
+  --border: rgba(212, 162, 76, 0.16); /* faint gold hairline */
+  --input: rgba(244, 246, 251, 0.14);
+  --ring: #d4a24c;
+  --chart-1: #d4a24c;
+  --chart-2: #3fa176;
+  --chart-3: #82aaff;
+  --chart-4: #e8c074;
+  --chart-5: #f5dda0;
+  --sidebar: #0a1a36;
+  --sidebar-foreground: #f4f6fb;
+  --sidebar-primary: #d4a24c;
+  --sidebar-primary-foreground: #050f24;
+  --sidebar-accent: #1a3a66;
+  --sidebar-accent-foreground: #f5dda0;
+  --sidebar-border: rgba(212, 162, 76, 0.16);
+  --sidebar-ring: #d4a24c;
+
+  /* Brand semantic tokens */
+  --success: #3fa176;              /* jade-500 (landing) */
+  --success-foreground: #04130d;
+  --live: #f04444;                 /* brighter coral on ink */
+  --live-foreground: #1a0606;
+  --gold: #d4a24c;
+  --gold-soft: #e8c074;            /* gold-300 */
 }
 
 @layer base {
@@ -153,16 +178,47 @@
     cursor: not-allowed;
   }
 
-  /* Premium feel: soft elevation on cards, smooth interactions, refined links. */
+  /* ── Heading font: Fraunces serif display (loaded in layout.tsx) ──
+     Applied to app page <h1> and the opt-in .font-display utility. Small
+     section-label h2s keep the sans stack so they don't turn awkwardly serif. */
+  h1, .font-display {
+    font-family: var(--font-fraunces), "Noto Serif SC", Georgia, serif;
+    letter-spacing: -0.01em;
+  }
+
+  /* Premium feel: soft elevation on cards, smooth interactions, refined links.
+     .lux-card gains a thin gold topline + gold-glow lift on hover — the same
+     signature as the landing's feature cards, now shared across the app. */
   [data-slot="card"], .lux-card {
+    position: relative;
     box-shadow: 0 1px 2px oklch(0.2 0.02 270 / 0.04), 0 4px 16px -8px oklch(0.2 0.02 270 / 0.10);
     transition: box-shadow .25s ease, transform .25s ease, border-color .25s ease;
+  }
+  [data-slot="card"]::before, .lux-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    border-radius: inherit;
+    background: linear-gradient(90deg, transparent, var(--gold-soft) 30%, var(--gold) 50%, var(--gold-soft) 70%, transparent);
+    opacity: 0.55;
+    pointer-events: none;
+  }
+  [data-slot="card"]:hover, .lux-card:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--gold) 45%, var(--border));
+    box-shadow: 0 1px 2px oklch(0.2 0.02 270 / 0.06), 0 14px 36px -16px color-mix(in srgb, var(--gold) 50%, transparent);
   }
   .dark [data-slot="card"], .dark .lux-card {
     box-shadow: 0 1px 2px oklch(0 0 0 / 0.3), 0 8px 24px -12px oklch(0 0 0 / 0.5);
   }
+  .dark [data-slot="card"]:hover, .dark .lux-card:hover {
+    box-shadow: 0 1px 2px oklch(0 0 0 / 0.3), 0 18px 44px -18px color-mix(in srgb, var(--gold) 40%, transparent);
+  }
   button, a, [data-slot="button"] { transition: all .2s ease; }
-  ::selection { background: oklch(0.45 0.13 274 / 0.22); }
+  ::selection { background: color-mix(in srgb, var(--gold) 30%, transparent); }
 
   /* Tame HDR / wide-gamut media so uploaded photos & videos don't blast the
      screen at night. dynamic-range-limit clamps HDR→SDR on supporting browsers
@@ -184,4 +240,109 @@
 @utility app-density {
   padding-top: var(--app-density-pad, 1.5rem);
   padding-bottom: var(--app-density-pad, 1.5rem);
+}
+
+/* ── Brand utilities (shared identity, usable on any app page) ───────────── */
+
+/* Mono "/ LABEL /" eyebrow in gold with wide tracking — the slashes are baked
+   into the copy (e.g. "/ SYSTEM /"), mirroring the landing's eyebrowSlash. */
+@utility eyebrow-slash {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+/* Gold gradient text for headline fragments — same recipe as the landing. */
+@utility gold-text {
+  background: linear-gradient(135deg, var(--gold-soft), var(--gold) 55%, var(--gold));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ── BrandMark logo (components/BrandMark.tsx) ───────────────────────────── */
+.brandmark {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #e8c074, #c69841);
+  color: #0a1a36;                               /* ink R */
+  font-family: var(--font-fraunces), "Noto Serif SC", Georgia, serif;
+  font-style: italic;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: 0 4px 14px rgba(212, 162, 76, 0.4);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+/* shimmer sweep — only on hover of the surrounding link/header brand */
+.brandmark::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%);
+  transform: translateX(-130%);
+  transition: transform 0s;
+  pointer-events: none;
+}
+.brandmark-host:hover .brandmark::after,
+.brandmark:hover::after {
+  animation: rfl-brandshimmer 0.9s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
+}
+/* live dot — the brand signature (red coral, pulsing), top-right corner */
+.brandmark-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #dc2626;
+  border: 1.5px solid var(--card, #fff);
+  box-shadow: 0 0 8px rgba(220, 38, 38, 0.9);
+  animation: rfl-brandpulse 1.8s ease-in-out infinite;
+}
+.dark .brandmark-dot { border-color: var(--card, #0e2240); }
+
+@keyframes rfl-brandshimmer {
+  from { transform: translateX(-130%); }
+  to { transform: translateX(130%); }
+}
+@keyframes rfl-brandpulse {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 8px rgba(220, 38, 38, 0.9); }
+  50% { opacity: 0.65; transform: scale(1.25); box-shadow: 0 0 12px rgba(220, 38, 38, 1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brandmark-dot { animation: none; }
+  .brandmark-host:hover .brandmark::after,
+  .brandmark:hover::after { animation: none; }
+}
+
+/* gold underline-on-hover for nav links (mirrors the reference) */
+.nav-underline {
+  position: relative;
+}
+.nav-underline::after {
+  content: "";
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: 0.25rem;
+  height: 1.5px;
+  background: linear-gradient(90deg, var(--gold-soft), var(--gold));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.25s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
+  border-radius: 1px;
+}
+.nav-underline:hover::after,
+.nav-underline[data-active="true"]::after {
+  transform: scaleX(1);
 }

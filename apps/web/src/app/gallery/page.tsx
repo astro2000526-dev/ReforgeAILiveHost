@@ -192,10 +192,10 @@ export default function GalleryPage() {
           {loop && (
             <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
               running
-                ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-400'
+                ? 'border-success/30 bg-success/10 text-success'
                 : 'border-border bg-muted text-muted-foreground'
             }`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${running ? 'animate-pulse bg-emerald-500' : 'bg-muted-foreground/50'}`} />
+              <span className={`h-1.5 w-1.5 rounded-full ${running ? 'animate-pulse bg-success' : 'bg-muted-foreground/50'}`} />
               {running ? t('gallery.statusOn') : t('gallery.statusOff')}
             </span>
           )}
@@ -275,10 +275,10 @@ export default function GalleryPage() {
           )}
         </div>
         {running && (
-          <p className="mt-2 text-[11px] text-emerald-600">{t('gallery.keepOpen')}</p>
+          <p className="mt-2 text-[11px] text-success">{t('gallery.keepOpen')}</p>
         )}
         {loop?.last_error && (
-          <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800 break-all">
+          <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive break-all">
             {loop.last_error} — {t('gallery.retrying')}
           </div>
         )}
@@ -384,7 +384,7 @@ function ClipCard({ clip, onPlay }: { clip: Clip; onPlay: () => void }) {
             <>
               <span className="text-xs">กำลังเรนเดอร์ {clip.progress}%</span>
               <div className="h-1.5 w-full max-w-[80%] overflow-hidden rounded-full bg-muted-foreground/20">
-                <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${Math.max(4, clip.progress)}%` }} />
+                <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.max(4, clip.progress)}%` }} />
               </div>
             </>
           )}

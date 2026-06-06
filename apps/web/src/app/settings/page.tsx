@@ -194,7 +194,7 @@ export default function SettingsPage() {
                 <optgroup label="Chinese">{ZH_VOICES.map(v => <option key={v} value={v}>{v}</option>)}</optgroup>
                 <optgroup label="English">{EN_VOICES.map(v => <option key={v} value={v}>{v}</option>)}</optgroup>
               </select>
-              <p className="text-xs text-emerald-700">{t('set.tts.noKey')}</p>
+              <p className="text-xs text-success">{t('set.tts.noKey')}</p>
             </div>
           )}
           {cfg.tts_provider === 'azure' && (
@@ -222,7 +222,7 @@ export default function SettingsPage() {
                   </select>
                 </div>
               </div>
-              <p className="text-xs text-emerald-700">{cfg.azure_speech_key ? t('set.tts.azureSet') : t('set.tts.azureUnset')}</p>
+              <p className="text-xs text-success">{cfg.azure_speech_key ? t('set.tts.azureSet') : t('set.tts.azureUnset')}</p>
             </div>
           )}
           {cfg.tts_provider === 'volcengine' && (
@@ -308,7 +308,7 @@ export default function SettingsPage() {
               onChange={e => setCfg(p => ({ ...p, fb_live_video_id: e.target.value.trim() }))} />
             <p className="text-xs text-muted-foreground">{t('set.fb.videoIdHint')}</p>
           </div>
-          <p className="text-xs text-emerald-700">{cfg.fb_page_token ? t('set.fb.tokenSet') : t('set.fb.tokenUnset')}</p>
+          <p className="text-xs text-success">{cfg.fb_page_token ? t('set.fb.tokenSet') : t('set.fb.tokenUnset')}</p>
         </section>
 
         {/* ── News API (Brave) — gallery auto news clips ───────────────── */}
@@ -325,7 +325,7 @@ export default function SettingsPage() {
               onChange={v => setCfg(p => ({ ...p, brave_api_key: v }))} />
             <p className="text-xs text-muted-foreground">{t('set.news.keyHint')}</p>
           </div>
-          <p className="text-xs text-emerald-700">{cfg.brave_api_key ? t('set.news.keySet') : t('set.news.keyUnset')}</p>
+          <p className="text-xs text-success">{cfg.brave_api_key ? t('set.news.keySet') : t('set.news.keyUnset')}</p>
         </section>
 
         {/* ── Lip-sync service ─────────────────────────────────────────── */}
@@ -358,7 +358,7 @@ export default function SettingsPage() {
                     {testing ? '…' : t('set.common.test')}
                   </Button>
                 </div>
-                {testResult && <p className={`text-xs ${testResult.startsWith('✓') ? 'text-emerald-700' : 'text-red-600'}`}>{testResult}</p>}
+                {testResult && <p className={`text-xs ${testResult.startsWith('✓') ? 'text-success' : 'text-destructive'}`}>{testResult}</p>}
               </div>
             </>
           )}
@@ -419,8 +419,8 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {error && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
-        {saved && <p className="text-sm text-emerald-700">{t('set.saved')}</p>}
+        {error && <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
+        {saved && <p className="text-sm text-success">{t('set.saved')}</p>}
 
         <Button className="w-full" size="lg" disabled={saving} onClick={save}>
           {saving ? t('set.saving') : t('set.save')}

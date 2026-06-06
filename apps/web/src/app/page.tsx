@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Fraunces, JetBrains_Mono } from "next/font/google";
+import { JetBrains_Mono } from "next/font/google";
 import {
   ArrowRight,
   Clapperboard,
@@ -17,6 +17,7 @@ import {
 
 import { getLocale } from "@/lib/locale-server";
 import type { Locale } from "@/lib/i18n";
+import { BrandMark } from "@/components/BrandMark";
 
 import styles from "./_landing/landing.module.css";
 import { CursorGlow } from "./_landing/CursorGlow";
@@ -40,14 +41,8 @@ export const dynamic = "force-dynamic";
 // full-bleed dark canvas; it does NOT render a second nav.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Fonts loaded only for this page (next/font is allowed in a page component).
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  weight: ["300", "400", "500"],
-  style: ["normal", "italic"],
-  variable: "--font-fraunces",
-  display: "swap",
-});
+// Fraunces (--font-fraunces) is loaded app-wide in layout.tsx now. JetBrains
+// Mono stays page-local (only the landing uses it).
 const jetbrains = JetBrains_Mono({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
@@ -543,7 +538,7 @@ export default async function Home() {
   const c = COPY[locale] ?? COPY.th;
 
   return (
-    <div className={`${styles.landing} ${fraunces.variable} ${jetbrains.variable}`}>
+    <div className={`${styles.landing} ${jetbrains.variable}`}>
       {/* effects — client islands */}
       <ScrollProgress />
       <CursorGlow />
@@ -976,8 +971,8 @@ export default async function Home() {
       {/* ── Footer ────────────────────────────────────────────────────── */}
       <footer className={styles.footer}>
         <div className={styles.container}>
-          <div className={styles.footerLogo}>
-            <span className={styles.logoMark}>R</span>
+          <div className={`${styles.footerLogo} brandmark-host`}>
+            <BrandMark size={38} />
             Reforge
           </div>
           <p className={styles.footerText}>{c.footer}</p>

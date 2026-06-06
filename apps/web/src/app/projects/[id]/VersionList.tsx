@@ -54,7 +54,7 @@ export function VersionList({ projectId, versions }: { projectId: string; versio
           </Button>
         )}
       </div>
-      {err && <p className="text-xs text-red-600">{err}</p>}
+      {err && <p className="text-xs text-destructive">{err}</p>}
 
       {versions.map((v, i) => {
         const m = v.meta ?? {}
@@ -73,7 +73,7 @@ export function VersionList({ projectId, versions }: { projectId: string; versio
               <span className="text-muted-foreground">{new Date(v.created_at).toLocaleString()}</span>
               <span className="ml-auto flex items-center gap-2 shrink-0">
                 {v.output_video_url && <a href={`${v.output_video_url}?t=${v.id.slice(0, 8)}`} target="_blank" rel="noreferrer" className="text-primary hover:underline">{t('ver.open')} ▶</a>}
-                <button onClick={() => remove([v.id])} disabled={busy} className="text-red-500 hover:text-red-600" title={t('ver.deleteOne')}>🗑</button>
+                <button onClick={() => remove([v.id])} disabled={busy} className="text-destructive hover:opacity-70" title={t('ver.deleteOne')}>🗑</button>
               </span>
             </div>
             {tags.length > 0 && (

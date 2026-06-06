@@ -88,7 +88,7 @@ export function PresenterCard({
               </option>
             ))}
           </select>
-          {error && <p className="text-xs text-red-600 break-all">{error}</p>}
+          {error && <p className="text-xs text-destructive break-all">{error}</p>}
           <Button
             size="sm"
             className="w-full"

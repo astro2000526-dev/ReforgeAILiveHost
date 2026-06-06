@@ -61,30 +61,34 @@ type StatusPayload = {
   fetchedAt: string
 }
 
+const WARN_BADGE = 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
+const NEUTRAL_BADGE = 'bg-muted text-muted-foreground'
+const SUCCESS_BADGE = 'bg-success/15 text-success'
+
 const STATUS_STYLE: Record<string, string> = {
   // task / generation states
-  queued: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300',
-  rendering: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-  tts: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-  lipsync: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-  concat: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-  generating: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-  done: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
-  ready: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
-  live: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
-  failed: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-  error: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-  cancelled: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300',
-  stopped: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300',
-  idle: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300',
-  draft: 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300',
+  queued: NEUTRAL_BADGE,
+  rendering: WARN_BADGE,
+  tts: WARN_BADGE,
+  lipsync: WARN_BADGE,
+  concat: WARN_BADGE,
+  generating: WARN_BADGE,
+  done: SUCCESS_BADGE,
+  ready: SUCCESS_BADGE,
+  live: 'bg-live/15 text-live',
+  failed: 'bg-destructive/15 text-destructive',
+  error: 'bg-destructive/15 text-destructive',
+  cancelled: NEUTRAL_BADGE,
+  stopped: NEUTRAL_BADGE,
+  idle: NEUTRAL_BADGE,
+  draft: NEUTRAL_BADGE,
 }
 
 function StatusBadge({ value }: { value: string }) {
   return (
     <span
       className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-        STATUS_STYLE[value] ?? 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300'
+        STATUS_STYLE[value] ?? NEUTRAL_BADGE
       }`}
     >
       {value}
@@ -106,9 +110,9 @@ function fmtDuration(sec: number): string {
 }
 
 function barTone(pct: number): string {
-  if (pct >= 90) return 'bg-red-500'
+  if (pct >= 90) return 'bg-destructive'
   if (pct >= 70) return 'bg-amber-500'
-  return 'bg-emerald-500'
+  return 'bg-success'
 }
 
 function ResourceCard({
@@ -190,18 +194,18 @@ export default function StatusPage() {
           <span
             className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium ${
               online
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-300'
-                : 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-900/30 dark:text-red-300'
+                ? 'border-success/30 bg-success/10 text-success'
+                : 'border-destructive/30 bg-destructive/10 text-destructive'
             }`}
           >
-            <span className={`size-1.5 rounded-full ${online ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            <span className={`size-1.5 rounded-full ${online ? 'bg-success' : 'bg-destructive'}`} />
             {online ? t('sys.online') : t('sys.offline')}
           </span>
         </div>
       </header>
 
       {error && (
-        <div className="mb-6 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-900/30 dark:text-red-300">
+        <div className="mb-6 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
           {error}
         </div>
       )}
@@ -390,7 +394,7 @@ export default function StatusPage() {
                           </span>
                         </div>
                         {g.error_message && (
-                          <p className="mt-0.5 truncate text-red-600 dark:text-red-400">
+                          <p className="mt-0.5 truncate text-destructive">
                             {g.error_message}
                           </p>
                         )}

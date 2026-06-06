@@ -16,10 +16,10 @@ const STATUS_KEY: Record<string, string> = {
 }
 
 const STATUS_STYLE: Record<string, string> = {
-  draft: 'bg-zinc-100 text-zinc-700',
-  generating: 'bg-amber-100 text-amber-800',
-  ready: 'bg-emerald-100 text-emerald-800',
-  failed: 'bg-red-100 text-red-700',
+  draft: 'bg-muted text-muted-foreground',
+  generating: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+  ready: 'bg-success/15 text-success',
+  failed: 'bg-destructive/15 text-destructive',
 }
 
 const LOCALE_TAG: Record<Locale, string> = { en: 'en-US', zh: 'zh-CN', th: 'th-TH' }
@@ -66,9 +66,9 @@ export default async function DashboardPage() {
       <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
           { label: t('dash.title'), value: stats.total, tone: 'text-foreground' },
-          { label: t('status.ready'), value: stats.ready, tone: 'text-emerald-600' },
-          { label: t('status.generating'), value: stats.generating, tone: 'text-amber-600' },
-          { label: t('status.draft'), value: stats.draft, tone: 'text-zinc-500' },
+          { label: t('status.ready'), value: stats.ready, tone: 'text-success' },
+          { label: t('status.generating'), value: stats.generating, tone: 'text-amber-600 dark:text-amber-400' },
+          { label: t('status.draft'), value: stats.draft, tone: 'text-muted-foreground' },
         ].map((s, i) => (
           <div key={i} className="rounded-lg border bg-card p-4">
             <div className={`text-2xl font-semibold ${s.tone}`}>{s.value}</div>
@@ -80,7 +80,7 @@ export default async function DashboardPage() {
       {/* Live สด — server-side 24/7 loop summary */}
       <Link href="/live" className="mb-8 block">
         <div className="flex flex-wrap items-center gap-4 rounded-xl border bg-card p-4 transition-colors hover:bg-muted/40">
-          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${live.running ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-100 text-zinc-600'}`}>
+          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${live.running ? 'bg-live/15 text-live' : 'bg-muted text-muted-foreground'}`}>
             {live.running ? '🔴 กำลังไลฟ์' : '⚫ ไลฟ์หยุดอยู่'}
           </span>
           <div className="text-sm">
@@ -97,7 +97,7 @@ export default async function DashboardPage() {
       </Link>
 
       {error ? (
-        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
           {t('dash.loadFailed')}{error.message}
         </div>
       ) : !projects || projects.length === 0 ? (
@@ -112,7 +112,7 @@ export default async function DashboardPage() {
                     <CardTitle className="text-base">{p.name}</CardTitle>
                     <span
                       className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                        STATUS_STYLE[p.status] ?? 'bg-zinc-100 text-zinc-700'
+                        STATUS_STYLE[p.status] ?? 'bg-muted text-muted-foreground'
                       }`}
                     >
                       {STATUS_KEY[p.status] ? t(STATUS_KEY[p.status]) : p.status}

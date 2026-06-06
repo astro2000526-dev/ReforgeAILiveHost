@@ -163,9 +163,9 @@ export default async function PlanPage() {
       <h1 className="mt-2 text-3xl font-semibold tracking-tight">{d.heading}</h1>
       <p className="mt-1 text-sm text-muted-foreground">{d.sub}</p>
 
-      <Block s={d.done} color="text-emerald-600" />
-      <Block s={d.next} color="text-amber-600" />
-      <Block s={d.arch} color="text-sky-600" />
+      <Block s={d.done} color="text-success" />
+      <Block s={d.next} color="text-amber-600 dark:text-amber-400" />
+      <Block s={d.arch} color="text-sky-600 dark:text-sky-400" />
 
       <div className="mt-8 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-300">
         {d.note}

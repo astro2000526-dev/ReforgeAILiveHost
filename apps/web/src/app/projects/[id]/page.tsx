@@ -20,10 +20,10 @@ const STATUS_KEY: Record<string, string> = {
 }
 
 const STATUS_STYLE: Record<string, string> = {
-  draft: 'bg-zinc-100 text-zinc-700',
-  generating: 'bg-amber-100 text-amber-800',
-  ready: 'bg-emerald-100 text-emerald-800',
-  failed: 'bg-red-100 text-red-700',
+  draft: 'bg-muted text-muted-foreground',
+  generating: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+  ready: 'bg-success/15 text-success',
+  failed: 'bg-destructive/15 text-destructive',
 }
 
 const LOCALE_TAG: Record<Locale, string> = { en: 'en-US', zh: 'zh-CN', th: 'th-TH' }
@@ -100,7 +100,7 @@ export default async function ProjectDetailPage({
   if (error) {
     return (
       <main className="mx-auto max-w-4xl px-6 py-12">
-        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
           {t('dash.loadFailed')}{error.message}
         </div>
       </main>
@@ -135,7 +135,7 @@ export default async function ProjectDetailPage({
         </div>
         <span
           className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${
-            STATUS_STYLE[data.status] ?? 'bg-zinc-100 text-zinc-700'
+            STATUS_STYLE[data.status] ?? 'bg-muted text-muted-foreground'
           }`}
         >
           {STATUS_KEY[data.status] ? t(STATUS_KEY[data.status]) : data.status}

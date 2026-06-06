@@ -172,7 +172,7 @@ export default function NewProjectPage() {
           {avatarsLoading ? (
             <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
           ) : avatarsError ? (
-            <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">{avatarsError}</div>
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{avatarsError}</div>
           ) : avatars.length === 0 ? (
             <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
               {t('wiz.s1.empty')}
@@ -263,7 +263,7 @@ export default function NewProjectPage() {
           </div>
 
           {scriptError && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{scriptError}</div>
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{scriptError}</div>
           )}
 
           <div className="flex justify-between">
@@ -369,7 +369,7 @@ export default function NewProjectPage() {
           </div>
 
           {saveError && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{saveError}</div>
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{saveError}</div>
           )}
 
           <div className="flex justify-between">

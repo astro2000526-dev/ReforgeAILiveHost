@@ -1,9 +1,11 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 import { LOCALES, LOCALE_LABELS } from '@/lib/i18n'
+import { BrandMark } from './BrandMark'
 import { useI18n } from './LocaleProvider'
 
 // Show the login affordance only when real auth is turned on. Default off keeps
@@ -39,6 +41,7 @@ function ThemeToggle() {
 export function AppHeader() {
   const { locale, setLocale, t } = useI18n()
   const [menuOpen, setMenuOpen] = useState(false)
+  const pathname = usePathname()
   const links = [
     { href: '/dashboard', label: t('nav.console') },
     { href: '/avatars', label: t('nav.avatars') },
@@ -52,16 +55,29 @@ export function AppHeader() {
     <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
         <div className="flex items-center gap-4">
-          <Link href="/" className="flex items-baseline gap-2">
-            <span className="text-sm font-semibold tracking-tight">{t('app.name')}</span>
-            <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-              MVP
+          <Link href="/" className="brandmark-host flex items-center gap-2.5">
+            <BrandMark size={30} />
+            <span className="flex items-baseline gap-2">
+              <span className="font-display text-sm font-semibold tracking-tight">{t('app.name')}</span>
+              <span className="rounded-full border border-gold/40 px-1.5 py-px text-[10px] font-mono uppercase tracking-widest text-gold">
+                MVP
+              </span>
             </span>
           </Link>
           <nav className="hidden items-center gap-1 sm:flex">
-            {links.map((l) => (
-              <Link key={l.href} href={l.href} className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">{l.label}</Link>
-            ))}
+            {links.map((l) => {
+              const active = pathname === l.href || pathname.startsWith(l.href + '/')
+              return (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  data-active={active}
+                  className="nav-underline rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground data-[active=true]:text-foreground"
+                >
+                  {l.label}
+                </Link>
+              )
+            })}
           </nav>
         </div>
         <nav className="flex items-center gap-1">

@@ -160,7 +160,7 @@ export default function FbLiveTestPage() {
             {it.reply && !it.replyPending && (
               <div className="mt-2 flex items-center gap-2">
                 {it.posted
-                  ? <span className="text-xs text-emerald-600">✓ posted to FB</span>
+                  ? <span className="text-xs text-success">✓ posted to FB</span>
                   : <Button size="sm" disabled={it.postPending} onClick={() => void postReply(it.id, it.reply!)}>
                       {it.postPending ? 'posting…' : 'Send to FB'}
                     </Button>}

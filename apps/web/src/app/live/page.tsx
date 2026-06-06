@@ -310,7 +310,8 @@ export default function LiveConsolePage() {
         <div className="lux-card space-y-3 rounded-2xl border bg-card p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">สถานะไลฟ์</h2>
-            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${running ? 'bg-emerald-100 text-emerald-800' : 'bg-zinc-100 text-zinc-600'}`}>
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${running ? 'bg-live/15 text-live' : 'bg-muted text-muted-foreground'}`}>
+              {running && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-live" />}
               {running ? 'กำลังไลฟ์' : 'หยุด'}
             </span>
           </div>
@@ -368,12 +369,12 @@ export default function LiveConsolePage() {
                 {c.reply && !c.replyPending && (
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     {c.posted
-                      ? <span className="text-xs text-emerald-600">✓ โพสต์แล้ว</span>
+                      ? <span className="text-xs text-success">✓ โพสต์แล้ว</span>
                       : <Button size="sm" disabled={c.postPending} onClick={() => void postReply(c.id, c.reply!)}>
                           {c.postPending ? 'กำลังโพสต์…' : 'ส่งกลับ FB'}
                         </Button>}
                     {c.spoken
-                      ? <span className="text-xs text-sky-600">🔊 พูดแล้ว</span>
+                      ? <span className="text-xs text-sky-600 dark:text-sky-400">🔊 พูดแล้ว</span>
                       : <Button size="sm" variant="outline" disabled={!running} onClick={() => { void speak(c.reply!); setComments((xs) => xs.map((x) => x.id === c.id ? { ...x, spoken: true } : x)) }}>
                           พูดในไลฟ์
                         </Button>}
@@ -395,8 +396,8 @@ export default function LiveConsolePage() {
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-muted-foreground">{l.ts}</span>
                   <span className="flex gap-2">
-                    {l.posted && <span className="text-emerald-600">FB✓</span>}
-                    {l.spoken && <span className="text-sky-600">🔊</span>}
+                    {l.posted && <span className="text-success">FB✓</span>}
+                    {l.spoken && <span className="text-sky-600 dark:text-sky-400">🔊</span>}
                   </span>
                 </div>
                 <p className="mt-1"><span className="text-muted-foreground">💬 {l.from ? `${l.from}: ` : ''}</span>{l.comment}</p>

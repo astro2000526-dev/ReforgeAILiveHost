@@ -257,8 +257,8 @@ export default function AvatarEditPage() {
           <Textarea rows={3} value={details} onChange={(e) => setDetails(e.target.value)} />
         </div>
 
-        {error && <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-800 break-all">{error}</div>}
-        {saved && <p className="text-sm text-emerald-600">✓ {t('av.uploaded')}</p>}
+        {error && <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive break-all">{error}</div>}
+        {saved && <p className="text-sm text-success">✓ {t('av.uploaded')}</p>}
 
         <div className="flex gap-2">
           <Button className="flex-1" size="lg" disabled={saving || uploadingImg || uploadingVid || uploadingBg || !name.trim()} onClick={save}>

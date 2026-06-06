@@ -196,7 +196,7 @@ export function ProjectActionPanel({
           </div>
 
           {renderFailed && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800 break-all">
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive break-all">
               {renderFailed}
             </div>
           )}
@@ -218,7 +218,7 @@ export function ProjectActionPanel({
           )}
 
           {renderDone && renderErrors.length === 0 && (
-            <p className="text-sm text-emerald-700">{t('panel.render.done')}</p>
+            <p className="text-sm text-success">{t('panel.render.done')}</p>
           )}
 
           {rendering && (
@@ -270,12 +270,13 @@ export function ProjectActionPanel({
           </div>
 
           {stream.status === 'live' && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">
+            <div className="flex items-center gap-1.5 rounded-md border border-live/30 bg-live/10 p-2 text-xs text-live">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-live" />
               {t('panel.stream.live')} {stream.stream_id}
             </div>
           )}
           {streamError && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800">
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
               {streamError}
             </div>
           )}
