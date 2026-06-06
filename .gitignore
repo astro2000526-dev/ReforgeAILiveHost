@@ -14,6 +14,9 @@ build/
 __pycache__/
 *.py[cod]
 *$py.class
+# Un-ignore __init__.py — the user-global gitignore has `_*` which would
+# silently drop every package marker (bit us on the UCloud deploy before).
+!__init__.py
 .venv/
 venv/
 .pytest_cache/
@@ -55,3 +58,4 @@ testvideo.mp4
 .kasidit/knowledge/*.private.md
 .kasidit/config.json
 # Do NOT commit ~/.claude/skills/kasidit/center/logs/ anywhere — contains prompts.
+.claude
