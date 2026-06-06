@@ -36,8 +36,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .config import MUSETALK_ENABLED
-from .ffmpeg_ops import mux_audio_onto_video
+from ..config import MUSETALK_ENABLED
+from ..media import mux_audio_onto_video
 
 log = logging.getLogger("pipeline.musetalk")
 

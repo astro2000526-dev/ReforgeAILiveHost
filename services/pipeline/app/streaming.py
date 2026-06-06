@@ -3,7 +3,6 @@
 Decision (Day 0 review #3): we re-encode rather than `-c copy`, force GOP=2s,
 and reset PTS at each loop boundary to keep Shopee's ingestion stable.
 """
-import asyncio
 import subprocess
 import time
 from dataclasses import dataclass, field

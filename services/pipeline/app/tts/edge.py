@@ -1,9 +1,11 @@
-"""Edge TTS provider — free but currently broken upstream (Sec-MS-GEC 403).
+"""Edge TTS provider — free but geo-blocked (403) in China.
 
-Kept around for local dev once Microsoft / the edge-tts library mend fences.
+Set EDGE_TTS_PROXY to a proxy outside CN (http://host:port or
+socks5://host:port) to route around the block.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import edge_tts
@@ -17,8 +19,9 @@ class EdgeTTSProvider:
     async def synthesize(
         self, text: str, voice: str, rate: str, output_path: Path
     ) -> Path:
+        proxy = (os.getenv("EDGE_TTS_PROXY") or "").strip() or None
         try:
-            communicate = edge_tts.Communicate(text=text, voice=voice, rate=rate)
+            communicate = edge_tts.Communicate(text=text, voice=voice, rate=rate, proxy=proxy)
             await communicate.save(str(output_path))
         except Exception as e:
             raise TTSError(f"edge-tts failed: {e}") from e

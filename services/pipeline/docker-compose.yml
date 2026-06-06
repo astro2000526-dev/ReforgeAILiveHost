@@ -1,3 +1,8 @@
+# ⚠️ DEPRECATED — single-service compose kept for ad-hoc GPU-box runs only.
+# The canonical deploy is deploy/docker-compose.yml (pipeline + lipsync +
+# nginx + db + qwen). Apply env/wiring changes THERE; this file gets no
+# GPU_BACKEND wiring on purpose (a standalone GPU box runs local mode).
+#
 # ReforgeAILiveHost — pipeline service (GPU)
 #
 # Run on the UCloud (or any) GPU host:
