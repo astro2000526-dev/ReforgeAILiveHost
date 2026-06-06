@@ -17,6 +17,8 @@ __pycache__/
 # Un-ignore __init__.py — the user-global gitignore has `_*` which would
 # silently drop every package marker (bit us on the UCloud deploy before).
 !__init__.py
+# Same global `_*` rule eats Next.js underscore-prefixed private folders.
+!apps/web/src/app/_*
 .venv/
 venv/
 .pytest_cache/
