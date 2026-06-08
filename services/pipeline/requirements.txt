@@ -18,8 +18,17 @@ transformers==4.44.2
 # Listed AFTER transformers so the resolver keeps 4.44.2.
 openvoice-cli==0.0.5
 librosa==0.9.1
+# Person matting for per-presenter background removal (u2net_human_seg).
+# onnxruntime here is the CPU build (dev machines); the Dockerfile swaps in
+# onnxruntime-gpu for CUDA. Listed BEFORE the numpy pin so 1.26.4 stays final.
+rembg==2.0.59
+onnxruntime==1.19.2
 # Pin numpy-1 LAST: openvoice-cli/librosa otherwise let pip pull numpy 2.x,
 # which breaks librosa 0.9.1 + the numpy-1-ABI native stack. (Same numpy-1 vs
 # numpy-2 hazard the lipsync image guards against.)
 numpy==1.26.4
 scipy==1.11.4
+# TikTok LIVE chat ingest (read-only). Pinned to the 6.0–6.4 range, which still
+# resolves against httpx<0.28 (supabase's ceiling above). If pip flags an httpx
+# conflict, drop TikTokLive a minor version rather than bumping httpx.
+TikTokLive>=6.0,<6.5

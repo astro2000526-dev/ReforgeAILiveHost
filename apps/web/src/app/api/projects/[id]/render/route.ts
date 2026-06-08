@@ -17,13 +17,9 @@ import { randomUUID } from 'node:crypto'
 import { DEMO_USER_ID } from '@/lib/demo-user'
 import { pipelineFetch } from '@/lib/pipeline-client'
 import { supabaseAdmin } from '@/lib/supabase-server'
-import { SYSTEM_CONFIG_DEFAULTS, type SystemConfig } from '@/lib/system-config'
+import { getSystemConfig } from '@/lib/system-config-server'
+import type { AvatarJoin, Segment } from '@/lib/types'
 
-type AvatarJoin = {
-  template_video_url: string | null
-  preview_image_url: string | null
-}
-type Segment = { type: string; text: string }
 type Row = {
   id: string
   name: string
@@ -31,27 +27,6 @@ type Row = {
   speech_rate: string | null
   script_segments: Segment[] | null
   avatar: AvatarJoin | AvatarJoin[] | null
-}
-
-// PostgREST gateway base — env-driven so it resolves to http://nginx:8088 in
-// the compose deploy and 127.0.0.1:8088 on a host-net deploy. (Was hardcoded
-// 127.0.0.1 which is the web container itself in compose → config never loaded.)
-const GW = ((process.env.SUPABASE_GATEWAY_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://127.0.0.1:8088').replace(/\/+$/, '')) + '/rest/v1'
-const SVC_KEY = process.env.SUPABASE_SERVICE_KEY ?? ''
-
-async function loadConfig(): Promise<SystemConfig> {
-  try {
-    const r = await fetch(`${GW}/system_config?key=eq.system_config_v1&select=value&limit=1`, {
-      headers: { Authorization: `Bearer ${SVC_KEY}`, apikey: SVC_KEY },
-      cache: 'no-store',
-      signal: AbortSignal.timeout(4000),
-    })
-    if (!r.ok) return SYSTEM_CONFIG_DEFAULTS
-    const rows = (await r.json()) as { value: SystemConfig }[]
-    return rows[0]?.value ?? SYSTEM_CONFIG_DEFAULTS
-  } catch {
-    return SYSTEM_CONFIG_DEFAULTS
-  }
 }
 
 export async function POST(
@@ -69,7 +44,7 @@ export async function POST(
 
   const { data, error } = await supabaseAdmin
     .from('projects')
-    .select(`id, name, voice, speech_rate, script_segments, avatar:avatars (template_video_url, preview_image_url)`)
+    .select(`id, name, voice, speech_rate, script_segments, avatar:avatars (template_video_url, preview_image_url, bg_remove, background_url, background_type, camera_zoom, frame_position, frame_scale)`)
     .eq('id', id)
     .eq('user_id', DEMO_USER_ID)
     .maybeSingle<Row>()
@@ -79,7 +54,7 @@ export async function POST(
 
   const avatar = Array.isArray(data.avatar) ? data.avatar[0] : data.avatar
   const generationId = randomUUID()
-  const cfg = await loadConfig()
+  const cfg = await getSystemConfig()
 
   // AI mode needs lip-sync enabled + a script + an avatar face source.
   // Prefer the VIDEO (natural head motion); fall back to the still image.
@@ -136,6 +111,17 @@ export async function POST(
       azure_key: cfg.azure_speech_key || null,
       azure_region: cfg.azure_speech_region || 'eastus',
       lipsync_model: cfg.lipsync_model || 'wav2lip',
+      // High-quality TTS (GPT-SoVITS) — engine + pitch + emotion (pipeline RenderRequest).
+      tts_engine: cfg.sovits_enabled ? 'sovits' : null,
+      tts_pitch: Number(cfg.tts_pitch) || 0,
+      tts_emotion: cfg.tts_emotion || null,
+      // Per-presenter background & camera settings (avatar-level).
+      bg_remove: !!avatar?.bg_remove,
+      background_url: avatar?.background_url ?? null,
+      background_type: avatar?.background_type ?? null,
+      camera_zoom: Number(avatar?.camera_zoom) || 1.0,
+      frame_position: avatar?.frame_position || 'center',
+      frame_scale: Number(avatar?.frame_scale) || 1.0,
     }),
   })
 

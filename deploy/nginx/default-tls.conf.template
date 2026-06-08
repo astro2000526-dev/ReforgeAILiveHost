@@ -1,0 +1,155 @@
+# Reforge reverse proxy — TLS variant (opt-in, rendered by enable-https.sh).
+#
+# Same vhosts as default.conf.template but served over 443 with a real cert at
+# /etc/letsencrypt/live/${DOMAIN}/, plus an HTTP server that (a) answers the
+# ACME http-01 challenge from the shared webroot and (b) 301-redirects
+# everything else to HTTPS.
+#
+# enable-https.sh runs `envsubst '${DOMAIN}'` on this file and writes the result
+# to ${DATA_DIR}/nginx/default.conf (replacing the nip.io HTTP config). The
+# nip.io flow keeps working too — nip.io hostnames resolve to the same IP, hit
+# port 80, and get redirected to https://${DOMAIN}.
+#
+# Upstreams resolve at request time via Docker DNS so nginx boots even if a
+# backend is briefly down.
+
+resolver 127.0.0.11 valid=10s ipv6=off;
+
+# ── HTTP :80 — ACME challenge + redirect to HTTPS ───────────────────────────
+server {
+    listen 80 default_server;
+    server_name ${DOMAIN} status.${DOMAIN} api.${DOMAIN} console.${DOMAIN} _;
+
+    # certbot --webroot drops its validation token here; this MUST stay on HTTP.
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        default_type "text/plain";
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# ── Status page (default HTTPS vhost) ───────────────────────────────────────
+# Root serves the in-app /status page; falls back to the static page (@static)
+# when web is down — exactly when you need status most.
+server {
+    listen 443 ssl default_server;
+    http2 on;
+    server_name status.${DOMAIN} ${DOMAIN} _;
+    client_max_body_size 300m;
+
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    location = / {
+        set $web http://web:3000;
+        proxy_pass $web/status;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        error_page 502 503 504 = @static;
+    }
+
+    location / {
+        set $web http://web:3000;
+        proxy_pass $web;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+        error_page 502 503 504 = @static;
+    }
+
+    location @static {
+        root /usr/share/nginx/html/status;
+        try_files /index.html =404;
+    }
+}
+
+# ── API: pipeline + rendered files + lipsync ────────────────────────────────
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name api.${DOMAIN};
+    client_max_body_size 300m;
+
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    # Rendered/uploaded mp4s straight off disk — fast range requests.
+    location /files/ {
+        alias /srv/files/;
+        add_header Cache-Control "no-cache";
+        add_header Accept-Ranges bytes;
+    }
+
+    location /lipsync/ {
+        set $lipsync http://lipsync:8000;
+        rewrite ^/lipsync/(.*) /$1 break;
+        proxy_pass $lipsync;
+        proxy_read_timeout 120s;
+    }
+
+    location / {
+        set $pipeline http://pipeline:8000;
+        proxy_pass $pipeline;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+}
+
+# ── Console: Next.js web ────────────────────────────────────────────────────
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name console.${DOMAIN};
+    client_max_body_size 300m;
+
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    location / {
+        set $web http://web:3000;
+        proxy_pass $web;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+}
+
+# ── Internal PostgREST gateway (reached by web as http://nginx:8088) ────────
+# Container-internal only (never published to the host), so it stays plain HTTP.
+server {
+    listen 8088;
+    server_name _;
+    client_max_body_size 50m;
+    location /rest/v1/ {
+        set $rest http://rest:3000;
+        rewrite ^/rest/v1/(.*)$ /$1 break;
+        proxy_pass $rest;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+    }
+    location = /health { return 200 'gw ok\n'; add_header Content-Type text/plain; }
+}

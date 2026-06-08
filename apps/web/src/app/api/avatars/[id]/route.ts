@@ -2,6 +2,7 @@
 // DELETE /api/avatars/:id — soft-delete (set is_active=false)
 
 import { NextResponse } from 'next/server'
+import { BG_TYPES, FRAME_POSITIONS, GENDERS, REGIONS } from '@/lib/constants'
 import { supabaseAdmin } from '@/lib/supabase-server'
 
 export async function GET(
@@ -11,7 +12,7 @@ export async function GET(
   const { id } = await params
   const { data, error } = await supabaseAdmin
     .from('avatars')
-    .select('id,name,preview_image_url,template_video_url,region,gender,description,display_order,is_active')
+    .select('id,name,preview_image_url,template_video_url,region,gender,description,display_order,is_active,bg_remove,background_url,background_type,camera_zoom,frame_position,frame_scale')
     .eq('id', id)
     .maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -27,10 +28,13 @@ type Body = {
   preview_image_url?: string | null
   template_video_url?: string | null
   display_order?: number
+  bg_remove?: boolean
+  background_url?: string | null
+  background_type?: string | null
+  camera_zoom?: number
+  frame_position?: string
+  frame_scale?: number
 }
-
-const REGIONS = ['TH', 'ID', 'VN', 'MY', 'CN', 'EN']
-const GENDERS = ['female', 'male', 'other']
 
 export async function PATCH(
   request: Request,
@@ -44,19 +48,25 @@ export async function PATCH(
 
   const patch: Record<string, unknown> = {}
   if (body.name?.trim())                                          patch.name = body.name.trim()
-  if (body.region !== undefined) patch.region = body.region && REGIONS.includes(body.region) ? body.region : null
-  if (body.gender !== undefined) patch.gender = body.gender && GENDERS.includes(body.gender) ? body.gender : null
+  if (body.region !== undefined) patch.region = body.region && (REGIONS as readonly string[]).includes(body.region) ? body.region : null
+  if (body.gender !== undefined) patch.gender = body.gender && (GENDERS as readonly string[]).includes(body.gender) ? body.gender : null
   if (body.description !== undefined)                             patch.description = body.description ?? null
   if (body.preview_image_url !== undefined)                       patch.preview_image_url = body.preview_image_url ?? null
   if (body.template_video_url !== undefined)                      patch.template_video_url = body.template_video_url ?? ''
   if (typeof body.display_order === 'number')                     patch.display_order = body.display_order
+  if (typeof body.bg_remove === 'boolean')                        patch.bg_remove = body.bg_remove
+  if (body.background_url !== undefined)                          patch.background_url = body.background_url ?? null
+  if (body.background_type !== undefined) patch.background_type = body.background_type && (BG_TYPES as readonly string[]).includes(body.background_type) ? body.background_type : null
+  if (typeof body.camera_zoom === 'number')                       patch.camera_zoom = Math.min(3, Math.max(1, body.camera_zoom))
+  if (body.frame_position !== undefined && (FRAME_POSITIONS as readonly string[]).includes(body.frame_position)) patch.frame_position = body.frame_position
+  if (typeof body.frame_scale === 'number')                       patch.frame_scale = Math.min(1, Math.max(0.2, body.frame_scale))
 
   if (!Object.keys(patch).length)
     return NextResponse.json({ error: 'nothing to update' }, { status: 400 })
 
   const { data, error } = await supabaseAdmin
     .from('avatars').update(patch).eq('id', id)
-    .select('id,name,preview_image_url,template_video_url,region,gender,description,display_order,is_active')
+    .select('id,name,preview_image_url,template_video_url,region,gender,description,display_order,is_active,bg_remove,background_url,background_type,camera_zoom,frame_position,frame_scale')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

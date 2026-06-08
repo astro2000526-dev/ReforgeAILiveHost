@@ -53,6 +53,13 @@ RUN python -m pip install --upgrade pip \
 COPY requirements.txt /workspace/requirements.txt
 RUN pip install -r /workspace/requirements.txt
 
+# rembg person matting on GPU: swap the CPU onnxruntime (from requirements.txt)
+# for the CUDA 12.x build so u2net_human_seg runs on the GPU.
+RUN pip uninstall -y onnxruntime && pip install onnxruntime-gpu==1.19.2
+# Persist the u2net weights (~176MB, downloaded on first matting call) on the
+# models volume so container restarts don't re-download.
+ENV U2NET_HOME=/workspace/MuseTalk/models/u2net
+
 # --- Offline TTS (espeak-ng) — works without network/key (edge-tts is geo-blocked in CN) ---
 # Late layer so it doesn't invalidate the heavy MuseTalk/torch cache above.
 USER root
@@ -63,7 +70,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends espeak-ng \
 COPY app /workspace/app
 COPY scripts /workspace/scripts
 COPY docker-entrypoint.sh /workspace/docker-entrypoint.sh
-RUN chmod +x /workspace/docker-entrypoint.sh
+RUN chmod +x /workspace/docker-entrypoint.sh /workspace/scripts/check_gpu_seam.sh \
+    # GPU-seam guard: fail the build if torch/rembg/gfpgan/transformers leak
+    # outside app/gpu/ — keeps the GPU boundary swappable via env alone.
+    && /workspace/scripts/check_gpu_seam.sh
 
 # --- Non-root user + writable dirs -------------------------------------------
 # Pre-create tmp/output so the user owns them before mount.

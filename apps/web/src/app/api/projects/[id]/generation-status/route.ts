@@ -13,6 +13,7 @@ import { NextResponse } from 'next/server'
 
 import { DEMO_USER_ID } from '@/lib/demo-user'
 import { pipelineFetch } from '@/lib/pipeline-client'
+import { latestGeneration } from '@/lib/server/latest-generation'
 import { supabaseAdmin } from '@/lib/supabase-server'
 
 type PipelineStatus = {
@@ -23,17 +24,6 @@ type PipelineStatus = {
   output_path?: string | null
   output_url?: string | null
   message?: string | null
-}
-
-async function findCurrentGeneration(projectId: string) {
-  const { data } = await supabaseAdmin
-    .from('generations')
-    .select('id, status, output_video_url')
-    .eq('project_id', projectId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  return data
 }
 
 export async function GET(
@@ -49,7 +39,7 @@ export async function GET(
   }
 
   const body = result.data as PipelineStatus
-  const gen = await findCurrentGeneration(id)
+  const gen = await latestGeneration(id)
   const isTerminal = body.status === 'done' || body.status === 'failed'
 
   if (gen && !['done', 'failed'].includes(gen.status)) {

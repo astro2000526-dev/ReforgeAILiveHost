@@ -1,10 +1,25 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Fraunces, Geist, Geist_Mono, Inter, Noto_Sans } from "next/font/google";
 import "./globals.css";
 
 import { AppHeader } from "@/components/AppHeader";
 import { LocaleProvider } from "@/components/LocaleProvider";
 import { getLocale } from "@/lib/locale-server";
+import { cn } from "@/lib/utils";
+
+const notoSansHeading = Noto_Sans({subsets:['latin'],variable:'--font-heading'});
+
+const inter = Inter({subsets:['latin'],variable:'--font-sans'});
+
+// Fraunces — serif display font for the whole app's identity (headings via
+// globals.css h1/.font-display, and the landing which reads --font-fraunces).
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-fraunces",
+  display: "swap",
+});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,7 +47,7 @@ export default async function RootLayout({
   return (
     <html
       lang={HTML_LANG[locale] ?? "en"}
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={cn("h-full", "antialiased", geistSans.variable, geistMono.variable, "font-sans", inter.variable, notoSansHeading.variable, fraunces.variable)}
       suppressHydrationWarning
     >
       <head>
@@ -42,11 +57,18 @@ export default async function RootLayout({
             __html: `(function(){try{var t=localStorage.getItem('theme');var d=t?t==='dark':matchMedia('(prefers-color-scheme:dark)').matches;if(d)document.documentElement.classList.add('dark');}catch(e){}})();`,
           }}
         />
+        {/* Apply saved appearance (font / size / density) before paint — keep in
+            sync with lib/appearance.ts. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var pad={compact:'0.75rem',normal:'1.5rem',relaxed:'2.5rem'};var a=JSON.parse(localStorage.getItem('reforge_appearance')||'{}');var r=document.documentElement;if(a.fontScale)r.style.setProperty('--app-font-scale',String(a.fontScale));r.style.setProperty('--app-density-pad',pad[a.density]||pad.normal);r.setAttribute('data-font',a.font||'default');}catch(e){}})();`,
+          }}
+        />
       </head>
       <body className="min-h-full flex flex-col">
         <LocaleProvider initialLocale={locale}>
           <AppHeader />
-          {children}
+          <div className="app-density flex flex-1 flex-col">{children}</div>
         </LocaleProvider>
       </body>
     </html>

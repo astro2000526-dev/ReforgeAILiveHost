@@ -16,7 +16,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from .config import FFMPEG_BIN
+from ..config import FFMPEG_BIN
 
 log = logging.getLogger("pipeline.face_restore")
 

@@ -32,7 +32,7 @@ services:
     volumes:
       - ${DATA_DIR}/pgdata:/var/lib/postgresql/data
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${DB_HOST_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -82,6 +82,23 @@ services:
       MUSETALK_ENABLED: "0"
       GFPGAN_ENABLED: "0"
       TTS_PROVIDER: mms
+      # ── GPU-call boundary (app/gpu) ────────────────────────────────────────
+      # Default (unset) = local: inference runs in this container; lipsync goes
+      # to the URL from Settings. To move ALL GPU work to another box running
+      # this same image, set:
+      #   GPU_BACKEND: remote
+      #   GPU_BASE_URL: http://new-gpu-box:8000     # its /gpu/* worker routes
+      #   GPU_TOKEN: ${PIPELINE_TOKEN}              # worker's PIPELINE_TOKEN
+      # Per-capability override: GPU_TTS_BACKEND / GPU_VOICE_CLONE_BACKEND /
+      # GPU_RESTORE_BACKEND / GPU_MATTE_BACKEND / GPU_MUSETALK_BACKEND /
+      # GPU_LIPSYNC_BACKEND (+ GPU_LIPSYNC_URL) — migrate one task at a time.
+      #
+      # ── GPT-SoVITS HQ TTS (optional) ───────────────────────────────────────
+      # Uncomment the `sovits` service below + this URL to enable. Pipeline
+      # reaches the api.py box here; references live under SOVITS_REF_DIR.
+      #   GPT_SOVITS_URL: http://sovits:9880
+      #   SOVITS_HTTP_TIMEOUT: "300"
+      #   SOVITS_REF_DIR: /workspace/sovits/refs
     volumes:
       - ${DATA_DIR}/pipeline/tmp:/workspace/tmp
       - ${DATA_DIR}/pipeline/output:/workspace/output
@@ -127,6 +144,32 @@ services:
     <<: *gpu
     networks: [reforge]
 
+  # ── GPU TTS: GPT-SoVITS api.py (optional, high-quality zero-shot) ───────────
+  # Disabled by default. To enable: uncomment this block + the GPT_SOVITS_URL
+  # env on the pipeline service above, drop your reference clips into
+  # ${DATA_DIR}/sovits/refs (<voice>.wav + <voice>.txt), build the image, and
+  # bring it up. See services/sovits/README.md for image + reference details.
+  # sovits:
+  #   build:
+  #     context: ../services/sovits
+  #     dockerfile: Dockerfile
+  #   image: reforge-sovits:latest
+  #   container_name: reforge-sovits
+  #   restart: unless-stopped
+  #   environment:
+  #     # GPT-SoVITS api.py serves on this port (api.py -p 9880).
+  #     SOVITS_PORT: "9880"
+  #     # References api.py reads at inference time (refer_wav_path is box-local).
+  #     SOVITS_REF_DIR: /workspace/sovits/refs
+  #   volumes:
+  #     # Pretrained GPT-SoVITS weights (download per README) + your references.
+  #     - ${DATA_DIR}/sovits/models:/workspace/GPT-SoVITS/GPT_SoVITS/pretrained_models
+  #     - ${DATA_DIR}/sovits/refs:/workspace/sovits/refs
+  #   ports:
+  #     - "127.0.0.1:9880:9880"
+  #   <<: *gpu
+  #   networks: [reforge]
+
   # ── Local LLM: Qwen2.5 via ollama (script gen + live auto-reply) ────────────
   qwen:
     image: ollama/ollama:latest
@@ -150,6 +193,11 @@ services:
       args:
         NEXT_PUBLIC_SUPABASE_URL: http://nginx:8088
         NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+        # Google login is off by default (demo mode). To enable, point the two
+        # NEXT_PUBLIC_SUPABASE_* values at Supabase CLOUD (https://<ref>.supabase.co
+        # + its anon key) and set this to 1. Inlined at build time, so a rebuild
+        # is required. See deploy/HTTPS_OAUTH.md.
+        NEXT_PUBLIC_AUTH_ENABLED: ${NEXT_PUBLIC_AUTH_ENABLED:-0}
     image: reforge-web:latest
     container_name: reforge-web
     restart: unless-stopped
@@ -158,12 +206,17 @@ services:
       - rest
     environment:
       NODE_ENV: production
-      PIPELINE_API_URL: http://pipeline:8000
+      # Env-driven so the no-GPU local stack can point at a host-run pipeline
+      # (e.g. http://host.docker.internal:8111). Default = in-compose service.
+      PIPELINE_API_URL: ${PIPELINE_API_URL:-http://pipeline:8000}
       PIPELINE_TOKEN: ${PIPELINE_TOKEN}
       NEXT_PUBLIC_SUPABASE_URL: http://nginx:8088
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_KEY}
       SUPABASE_SERVICE_KEY: ${SERVICE_KEY}
+      # Read at runtime by the server-side auth seam (current-user.ts). Mirror of
+      # the build arg above — keep both in sync.
+      NEXT_PUBLIC_AUTH_ENABLED: ${NEXT_PUBLIC_AUTH_ENABLED:-0}
     networks: [reforge]
 
   # ── Reverse proxy: public :80 vhosts + internal :8088 PostgREST gateway ─────
@@ -177,9 +230,21 @@ services:
       - lipsync
       - rest
     ports:
-      - "80:80"
+      - "${HTTP_PORT:-80}:80"
+      # ── HTTPS (opt-in via scripts/enable-https.sh) ─────────────────────────
+      # Uncomment to expose 443, then run enable-https.sh. See HTTPS_OAUTH.md.
+      # - "443:443"
+    # DOMAIN is consumed by enable-https.sh (not nginx itself); harmless if blank.
+    environment:
+      DOMAIN: ${DOMAIN:-}
     volumes:
       - ${DATA_DIR}/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ${DATA_DIR}/pipeline/output:/srv/files:ro
       - ${DATA_DIR}/status:/usr/share/nginx/html/status:ro
+      # ── HTTPS (opt-in) ─────────────────────────────────────────────────────
+      # certbot writes certs to letsencrypt/ and the ACME challenge token to
+      # certbot/; nginx reads the cert (TLS template) and serves the challenge
+      # over :80. Uncomment BOTH, recreate nginx, then run enable-https.sh.
+      # - ${DATA_DIR}/letsencrypt:/etc/letsencrypt:ro
+      # - ${DATA_DIR}/certbot:/var/www/certbot:ro
     networks: [reforge]

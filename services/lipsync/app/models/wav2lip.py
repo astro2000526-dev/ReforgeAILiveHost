@@ -74,6 +74,23 @@ class Wav2LipModel(LipSyncModel):
 
         import torch
 
+        # librosa >= 0.10 made filters.mel() keyword-only, but upstream
+        # audio.py calls it positionally: mel(sr, n_fft, n_mels=.., fmin=..,
+        # fmax=..) -> "mel() takes 0 positional arguments but 2 ... given".
+        # Shim once, globally, so audio.melspectrogram keeps working.
+        import librosa
+
+        if not getattr(librosa.filters.mel, "_w2l_positional_shim", False):
+            _orig_mel = librosa.filters.mel
+
+            def _mel_compat(*args, **kwargs):
+                for name, val in zip(("sr", "n_fft"), args):
+                    kwargs.setdefault(name, val)
+                return _orig_mel(**kwargs)
+
+            _mel_compat._w2l_positional_shim = True
+            librosa.filters.mel = _mel_compat
+
         ckpt_path = self._root / "checkpoints" / "wav2lip_gan.pth"
         log.info("loading Wav2Lip ckpt=%s", ckpt_path)
         ckpt = torch.load(str(ckpt_path), map_location=self._device)

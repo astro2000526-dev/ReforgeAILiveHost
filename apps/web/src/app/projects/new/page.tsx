@@ -9,27 +9,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useI18n } from '@/components/LocaleProvider'
+import type { Avatar, Segment } from '@/lib/types'
 
-type Avatar = {
-  id: string
-  name: string
-  preview_image_url: string | null
-  region: string | null
-  gender: string | null
-}
+type AvatarOption = Pick<Avatar, 'id' | 'name' | 'preview_image_url' | 'region' | 'gender'>
 
-type Segment = {
-  type: string
-  text: string
-  duration_sec?: number
-}
-
+// label/hint are i18n keys — resolved with t() at render time.
 const VOICE_OPTIONS = [
-  { id: 'BV001_streaming', label: '通用女声 · 中文', hint: '稳重清晰，适合大多数品类', lang: 'zh-CN' },
-  { id: 'BV700_streaming', label: '灿灿（活泼）· 中文', hint: '亲和有活力，适合美妆/服饰', lang: 'zh-CN' },
-  { id: 'BV421_streaming', label: '天才少女 · 多语言', hint: '中文 / 越南语 / 印尼语兼容', lang: 'zh-CN' },
-  { id: 'th-TH-PremwadeeNeural', label: 'Premwadee · ไทย (หญิง)', hint: 'Warm & professional — health / beauty', lang: 'th-TH' },
-  { id: 'th-TH-NiwatNeural', label: 'Niwat · ไทย (ชาย)', hint: 'Neutral & steady — 3C / appliances', lang: 'th-TH' },
+  { id: 'BV001_streaming', label: 'voice.bv001.label', hint: 'voice.bv001.hint', lang: 'zh-CN' },
+  { id: 'BV700_streaming', label: 'voice.bv700.label', hint: 'voice.bv700.hint', lang: 'zh-CN' },
+  { id: 'BV421_streaming', label: 'voice.bv421.label', hint: 'voice.bv421.hint', lang: 'zh-CN' },
+  { id: 'th-TH-PremwadeeNeural', label: 'voice.prem.label', hint: 'voice.prem.hint', lang: 'th-TH' },
+  { id: 'th-TH-NiwatNeural', label: 'voice.niwat.label', hint: 'voice.niwat.hint', lang: 'th-TH' },
 ]
 
 // Script language follows the UI language the user picked in the header.
@@ -44,7 +34,7 @@ export default function NewProjectPage() {
   const { t, locale } = useI18n()
 
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
-  const [avatars, setAvatars] = useState<Avatar[]>([])
+  const [avatars, setAvatars] = useState<AvatarOption[]>([])
   const [avatarsLoading, setAvatarsLoading] = useState(true)
   const [avatarsError, setAvatarsError] = useState<string | null>(null)
   const [avatarId, setAvatarId] = useState<string>('')
@@ -76,7 +66,7 @@ export default function NewProjectPage() {
     fetch('/api/avatars')
       .then(async (r) => {
         if (!r.ok) throw new Error(`avatars HTTP ${r.status}`)
-        return r.json() as Promise<{ avatars: Avatar[] }>
+        return r.json() as Promise<{ avatars: AvatarOption[] }>
       })
       .then((data) => {
         if (cancelled) return
@@ -182,7 +172,7 @@ export default function NewProjectPage() {
           {avatarsLoading ? (
             <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
           ) : avatarsError ? (
-            <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">{avatarsError}</div>
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{avatarsError}</div>
           ) : avatars.length === 0 ? (
             <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
               {t('wiz.s1.empty')}
@@ -202,7 +192,7 @@ export default function NewProjectPage() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={a.preview_image_url}
-                      alt={a.name}
+                      alt={a.name ?? ''}
                       className="mb-3 aspect-[2/3] w-full rounded-md object-cover"
                     />
                   )}
@@ -273,7 +263,7 @@ export default function NewProjectPage() {
           </div>
 
           {scriptError && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{scriptError}</div>
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{scriptError}</div>
           )}
 
           <div className="flex justify-between">
@@ -353,8 +343,8 @@ export default function NewProjectPage() {
                     voice === v.id ? 'border-primary ring-2 ring-primary/30' : 'border-border'
                   }`}
                 >
-                  <p className="text-sm font-medium">{v.label}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{v.hint}</p>
+                  <p className="text-sm font-medium">{t(v.label)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{t(v.hint)}</p>
                 </button>
               ))}
             </div>
@@ -379,7 +369,7 @@ export default function NewProjectPage() {
           </div>
 
           {saveError && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{saveError}</div>
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{saveError}</div>
           )}
 
           <div className="flex justify-between">

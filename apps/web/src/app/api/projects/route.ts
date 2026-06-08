@@ -4,14 +4,15 @@
 
 import { NextResponse } from 'next/server'
 
-import { DEMO_USER_ID } from '@/lib/demo-user'
+import { getCurrentUserId } from '@/lib/current-user'
 import { supabaseAdmin } from '@/lib/supabase-server'
 
 export async function GET() {
+  const userId = await getCurrentUserId()
   const { data, error } = await supabaseAdmin
     .from('projects')
     .select('id, name, status, language, voice, avatar_id, created_at, updated_at')
-    .eq('user_id', DEMO_USER_ID)
+    .eq('user_id', userId)
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -49,10 +50,11 @@ export async function POST(request: Request) {
     )
   }
 
+  const userId = await getCurrentUserId()
   const { data, error } = await supabaseAdmin
     .from('projects')
     .insert({
-      user_id: DEMO_USER_ID,
+      user_id: userId,
       name: body.name,
       avatar_id: body.avatar_id,
       product_info: body.product_info ?? {},

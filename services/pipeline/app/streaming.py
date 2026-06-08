@@ -3,7 +3,6 @@
 Decision (Day 0 review #3): we re-encode rather than `-c copy`, force GOP=2s,
 and reset PTS at each loop boundary to keep Shopee's ingestion stable.
 """
-import asyncio
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -64,6 +63,16 @@ def stop_stream(stream_id: str) -> bool:
             handle.proc.kill()
     _streams.pop(stream_id, None)
     return True
+
+
+def list_streams() -> list[dict]:
+    """Snapshot of every tracked ffmpeg push — consumed by /system/status."""
+    out = []
+    for sid in list(_streams):
+        s = stream_status(sid)
+        if s:
+            out.append(s)
+    return out
 
 
 def stream_status(stream_id: str) -> Optional[dict]:

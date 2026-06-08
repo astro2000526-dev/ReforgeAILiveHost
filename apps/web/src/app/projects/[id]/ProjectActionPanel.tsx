@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { Button } from '@/components/ui/button'
@@ -73,29 +73,40 @@ export function ProjectActionPanel({
         if (alive && js && js.status === 'rendering') {
           setRendering(true)
           setRenderPct(js.pct ?? 0)
-          pollRender()
+          watchRender()
         }
       })
       .catch(() => {})
-    return () => { alive = false }
+    return () => { alive = false; esRef.current?.close() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function pollRender() {
-    for (let i = 0; i < 200; i++) {
-      await new Promise((res) => setTimeout(res, 2500))
-      const s = await fetch(`/api/projects/${projectId}/render-status`, { cache: 'no-store' })
-      if (!s.ok) continue
-      const js = (await s.json()) as { status: string; pct: number; source?: string; output_url?: string; errors?: string[] }
-      setRenderPct(js.pct ?? 0)
-      if (js.status === 'done') {
-        setRenderErrors(js.errors ?? []); setRenderSource(js.source ?? null)
-        setRenderDone(true); setProjectStatus('ready'); setRendering(false); router.refresh(); return
+  // SSE: one long-lived connection instead of 2.5s polling. The server samples
+  // the pipeline and pushes only state changes; EventSource auto-reconnects.
+  const esRef = useRef<EventSource | null>(null)
+  function watchRender(): Promise<void> {
+    esRef.current?.close()
+    return new Promise((resolve) => {
+      const es = new EventSource(`/api/projects/${projectId}/render-status/stream`)
+      esRef.current = es
+      const finish = (fn: () => void) => { es.close(); esRef.current = null; fn(); resolve() }
+      es.onmessage = (e) => {
+        let js: { status: string; pct: number; source?: string | null; errors?: string[] }
+        try { js = JSON.parse(e.data) } catch { return }
+        if (js.status !== 'error') setRenderPct(js.pct ?? 0)
+        if (js.status === 'done') {
+          finish(() => {
+            setRenderErrors(js.errors ?? []); setRenderSource(js.source ?? null)
+            setRenderDone(true); setProjectStatus('ready'); setRendering(false); router.refresh()
+          })
+        } else if (js.status === 'failed') {
+          finish(() => { setRenderFailed((js.errors ?? []).join('; ') || 'render failed'); setRendering(false) })
+        } else if (js.status === 'cancelled') {
+          finish(() => { setRendering(false); setRenderPct(0) })
+        }
       }
-      if (js.status === 'failed') { setRenderFailed((js.errors ?? []).join('; ') || 'render failed'); setRendering(false); return }
-      if (js.status === 'cancelled') { setRendering(false); setRenderPct(0); return }
-    }
-    setRenderFailed('render timed out'); setRendering(false)
+      // transient drops are fine — EventSource reconnects on its own
+    })
   }
 
   async function renderClip() {
@@ -107,7 +118,7 @@ export function ProjectActionPanel({
       })
       const data = (await r.json()) as { ok?: boolean; error?: string }
       if (!r.ok) throw new Error(data.error ?? `HTTP ${r.status}`)
-      await pollRender()
+      await watchRender()
     } catch (err) {
       setRenderFailed(err instanceof Error ? err.message : String(err)); setRendering(false)
     }
@@ -115,6 +126,7 @@ export function ProjectActionPanel({
 
   async function cancelRender() {
     try { await fetch(`/api/projects/${projectId}/render-cancel`, { method: 'POST' }) } catch {}
+    esRef.current?.close(); esRef.current = null
     setRendering(false); setRenderPct(0)
   }
 
@@ -168,7 +180,7 @@ export function ProjectActionPanel({
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1.5">
-            <Label htmlFor="duration">{t('panel.render.duration')} <span className="text-xs font-normal text-muted-foreground">(0 วินาที – 30 นาที / {Math.floor(duration/60)}:{String(duration%60).padStart(2,'0')})</span></Label>
+            <Label htmlFor="duration">{t('panel.render.duration')} <span className="text-xs font-normal text-muted-foreground">({t('panel.render.range')} / {Math.floor(duration/60)}:{String(duration%60).padStart(2,'0')})</span></Label>
             <Input
               id="duration"
               type="number"
@@ -184,7 +196,7 @@ export function ProjectActionPanel({
           </div>
 
           {renderFailed && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800 break-all">
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive break-all">
               {renderFailed}
             </div>
           )}
@@ -206,7 +218,7 @@ export function ProjectActionPanel({
           )}
 
           {renderDone && renderErrors.length === 0 && (
-            <p className="text-sm text-emerald-700">{t('panel.render.done')}</p>
+            <p className="text-sm text-success">{t('panel.render.done')}</p>
           )}
 
           {rendering && (
@@ -258,12 +270,13 @@ export function ProjectActionPanel({
           </div>
 
           {stream.status === 'live' && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-800">
+            <div className="flex items-center gap-1.5 rounded-md border border-live/30 bg-live/10 p-2 text-xs text-live">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-live" />
               {t('panel.stream.live')} {stream.stream_id}
             </div>
           )}
           {streamError && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800">
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
               {streamError}
             </div>
           )}

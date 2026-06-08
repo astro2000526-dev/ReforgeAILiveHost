@@ -7,19 +7,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useI18n } from '@/components/LocaleProvider'
-
-type Avatar = {
-  id: string
-  name: string
-  preview_image_url: string | null
-  template_video_url: string | null
-  region: string | null
-  gender: string | null
-  description: string | null
-  display_order?: number
-}
-
-const REGIONS = ['TH', 'ID', 'VN', 'MY', 'CN', 'EN']
+import { UploadTile, compressImage, uploadFile } from '@/components/UploadTile'
+import { REGIONS } from '@/lib/constants'
+import type { Avatar } from '@/lib/types'
 
 // ─── inline form state (shared by create + edit) ─────────────────────────────
 function emptyForm(): FormState {
@@ -35,9 +25,13 @@ export default function AvatarsPage() {
   const [form, setForm] = useState<FormState>(emptyForm())
   const [uploadingImg, setUploadingImg] = useState(false)
   const [uploadingVid, setUploadingVid] = useState(false)
+  const [localImg, setLocalImg] = useState<string | null>(null)
+  const [localVid, setLocalVid] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [savingOrder, setSavingOrder] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -50,41 +44,59 @@ export default function AvatarsPage() {
   useEffect(() => { load() }, [])
 
   function cancelEdit() { setEditId(null); setForm(emptyForm()); setError(null) }
+
+  // ── drag-to-sort ────────────────────────────────────────────────────────
+  // HTML5 DnD: dragging a card over another swaps it into that slot
+  // (optimistic), drop persists display_order = (index+1)*10 for every card
+  // whose slot changed.
+  function onDragOverCard(overId: string) {
+    if (!dragId || dragId === overId) return
+    setAvatars((xs) => {
+      const from = xs.findIndex((a) => a.id === dragId)
+      const to = xs.findIndex((a) => a.id === overId)
+      if (from < 0 || to < 0) return xs
+      const next = [...xs]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+  }
+
+  async function persistOrder() {
+    setDragId(null)
+    setSavingOrder(true)
+    try {
+      const changed = avatars
+        .map((a, i) => ({ id: a.id, order: (i + 1) * 10, prev: a.display_order }))
+        .filter((x) => x.prev !== x.order)
+      await Promise.all(changed.map((x) =>
+        fetch(`/api/avatars/${x.id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ display_order: x.order }),
+        })
+      ))
+      // sync local copy so further drags diff correctly
+      setAvatars((xs) => xs.map((a, i) => ({ ...a, display_order: (i + 1) * 10 })))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      await load() // restore server truth on failure
+    } finally { setSavingOrder(false) }
+  }
   void setEditId  // editId stays for create-mode display; edit moved to /avatars/[id]
 
-  async function uploadFile(file: Blob, filename: string): Promise<string> {
-    const fd = new FormData()
-    fd.append('file', file, filename)
-    const r = await fetch('/api/uploads', { method: 'POST', body: fd })
-    const d = (await r.json()) as { url?: string; error?: string }
-    if (!r.ok || !d.url) throw new Error(d.error ?? `upload HTTP ${r.status}`)
-    return d.url
-  }
-
-  async function compressImage(file: File): Promise<Blob> {
-    if (!file.type.startsWith('image/')) return file
-    const bmp = await createImageBitmap(file).catch(() => null)
-    if (!bmp) return file
-    const s = Math.min(1, 1920 / Math.max(bmp.width, bmp.height))
-    const c = document.createElement('canvas')
-    c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s)
-    c.getContext('2d')?.drawImage(bmp, 0, 0, c.width, c.height)
-    return await new Promise<Blob | null>(res => c.toBlob(res, 'image/jpeg', 0.85)) ?? file
-  }
-
-  async function onPickImage(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]; if (!f) return
+  async function onPickImage(f: File) {
+    setLocalImg(URL.createObjectURL(f)) // instant preview while uploading
     setUploadingImg(true); setError(null)
-    try { const b = await compressImage(f); setForm(p => ({ ...p, imageUrl: '' })); const url = await uploadFile(b, 'preview.jpg'); setForm(p => ({ ...p, imageUrl: url })) }
-    catch (err) { setError(err instanceof Error ? err.message : String(err)) }
+    try { const url = await uploadFile(await compressImage(f), 'preview.jpg'); setForm(p => ({ ...p, imageUrl: url })); setLocalImg(null) }
+    catch (err) { setLocalImg(null); setError(err instanceof Error ? err.message : String(err)) }
     finally { setUploadingImg(false) }
   }
 
-  async function onPickVideo(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]; if (!f) return
+  async function onPickVideo(f: File) {
+    setLocalVid(URL.createObjectURL(f))
     setUploadingVid(true); setError(null)
-    try { const url = await uploadFile(f, f.name); setForm(p => ({ ...p, videoUrl: url })) }
-    catch (err) { setError(err instanceof Error ? err.message : String(err)) }
+    try { const url = await uploadFile(f, f.name); setForm(p => ({ ...p, videoUrl: url })); setLocalVid(null) }
+    catch (err) { setLocalVid(null); setError(err instanceof Error ? err.message : String(err)) }
     finally { setUploadingVid(false) }
   }
 
@@ -154,34 +166,26 @@ export default function AvatarsPage() {
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label>{t('av.image')} <span className="text-muted-foreground text-xs">({t('av.optional')})</span></Label>
-        {form.imageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={form.imageUrl} alt="" className="mb-1 h-20 w-14 rounded object-cover border" />
-        )}
-        <input type="file" accept="image/*" onChange={onPickImage} className="block w-full text-xs" />
-        {uploadingImg && <p className="text-xs text-amber-600">{t('av.uploading')}</p>}
-        {form.imageUrl && !uploadingImg && <p className="text-xs text-emerald-600">{t('av.uploaded')}</p>}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>{t('av.image')} <span className="text-muted-foreground text-xs">({t('av.optional')})</span></Label>
+          <UploadTile kind="image" url={form.imageUrl} localUrl={localImg} uploading={uploadingImg} emptyIcon="🎭" onPick={onPickImage} />
+          {form.imageUrl && !uploadingImg && <p className="text-xs text-success">{t('av.uploaded')}</p>}
+        </div>
+        <div className="space-y-2">
+          <Label>{t('av.video')} <span className="text-muted-foreground text-xs">({t('av.optional')})</span></Label>
+          <UploadTile kind="video" url={form.videoUrl} localUrl={localVid} uploading={uploadingVid} emptyIcon="🎬" onPick={onPickVideo} />
+          {form.videoUrl && !uploadingVid && <p className="text-xs text-success break-all">{t('av.uploaded')}</p>}
+        </div>
       </div>
-
-      <div className="space-y-2">
-        <Label>{t('av.video')} <span className="text-muted-foreground text-xs">({t('av.optional')})</span></Label>
-        {form.videoUrl && (
-          <video src={form.videoUrl} className="mb-1 h-24 w-auto rounded border bg-black" muted playsInline controls />
-        )}
-        <input type="file" accept="video/*" onChange={onPickVideo} className="block w-full text-xs" />
-        {uploadingVid && <p className="text-xs text-amber-600">{t('av.uploading')}</p>}
-        {form.videoUrl && !uploadingVid && <p className="text-xs text-emerald-600 break-all">{t('av.uploaded')}</p>}
-        <p className="text-[11px] text-muted-foreground">{t('av.videoHint')}</p>
-      </div>
+      <p className="text-[11px] text-muted-foreground">{t('av.videoHint')}</p>
 
       <div className="space-y-2">
         <Label>{t('av.details')} <span className="text-muted-foreground text-xs">({t('av.optional')})</span></Label>
         <Textarea rows={3} value={form.details} onChange={e => setForm(p => ({ ...p, details: e.target.value }))} />
       </div>
 
-      {error && <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-800 break-all">{error}</div>}
+      {error && <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive break-all">{error}</div>}
 
       <div className="flex gap-2">
         <Button className="flex-1" disabled={saving || uploadingImg || uploadingVid || !form.name.trim()} onClick={save}>
@@ -210,6 +214,9 @@ export default function AvatarsPage() {
         <section>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-medium">{t('av.existing')}</h2>
+            <span className="text-xs text-muted-foreground">
+              {savingOrder ? t('av.orderSaving') : t('av.dragSort')}
+            </span>
             {editId && (
               <Button size="sm" variant="outline" onClick={cancelEdit}>{t('av.add')} (new)</Button>
             )}
@@ -221,18 +228,29 @@ export default function AvatarsPage() {
           ) : (
             <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
               {avatars.map((a) => (
-                <div key={a.id} className={`rounded-lg border p-3 transition-colors ${editId === a.id ? 'border-primary ring-2 ring-primary/30' : 'hover:bg-muted/30'}`}>
+                <div
+                  key={a.id}
+                  draggable
+                  onDragStart={(e) => { setDragId(a.id); e.dataTransfer.effectAllowed = 'move' }}
+                  onDragOver={(e) => { e.preventDefault(); onDragOverCard(a.id) }}
+                  onDragEnd={() => void persistOrder()}
+                  onDrop={(e) => e.preventDefault()}
+                  className={`cursor-grab active:cursor-grabbing rounded-lg border p-3 transition-colors ${
+                    dragId === a.id ? 'opacity-50 ring-2 ring-primary/50' :
+                    editId === a.id ? 'border-primary ring-2 ring-primary/30' : 'hover:bg-muted/30'
+                  }`}
+                >
                   {a.preview_image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={a.preview_image_url} alt={a.name} className="mb-2 aspect-[2/3] w-full rounded-md object-cover" />
+                    <img src={a.preview_image_url} alt={a.name ?? ''} draggable={false} className="mb-2 aspect-[2/3] w-full rounded-md object-cover" />
                   ) : (
                     <div className="mb-2 flex aspect-[2/3] w-full items-center justify-center rounded-md bg-muted text-3xl text-muted-foreground">🎭</div>
                   )}
                   <p className="text-sm font-medium truncate">{a.name}</p>
                   <p className="text-xs text-muted-foreground">{a.region ?? '?'} · {a.gender ?? '?'}</p>
                   {a.template_video_url
-                    ? <p className="mt-1 text-[11px] text-emerald-600">● {t('av.hasVideo')}</p>
-                    : <p className="mt-1 text-[11px] text-amber-600">○ {t('av.noVideo')}</p>
+                    ? <p className="mt-1 text-[11px] text-success">● {t('av.hasVideo')}</p>
+                    : <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">○ {t('av.noVideo')}</p>
                   }
                   {a.description && <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">{a.description}</p>}
                   <div className="mt-3 flex gap-1.5">
@@ -240,7 +258,7 @@ export default function AvatarsPage() {
                       className="flex-1 inline-flex items-center justify-center rounded-md border px-2 py-1 text-xs hover:bg-muted">
                       {t('av.edit')}
                     </Link>
-                    <Button size="sm" variant="ghost" className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50"
+                    <Button size="sm" variant="ghost" className="text-xs text-destructive hover:bg-destructive/10"
                       disabled={deleting === a.id} onClick={() => deactivate(a.id)}>
                       {deleting === a.id ? '…' : '✕'}
                     </Button>

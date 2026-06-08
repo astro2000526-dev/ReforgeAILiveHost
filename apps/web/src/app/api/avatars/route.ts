@@ -4,12 +4,13 @@
 
 import { NextResponse } from 'next/server'
 
+import { GENDERS, REGIONS } from '@/lib/constants'
 import { supabaseAdmin } from '@/lib/supabase-server'
 
 export async function GET() {
   const { data, error } = await supabaseAdmin
     .from('avatars')
-    .select('id, name, preview_image_url, template_video_url, region, gender, display_order, description, is_active')
+    .select('id, name, preview_image_url, template_video_url, region, gender, display_order, description, is_active, bg_remove, background_url, background_type, camera_zoom, frame_position, frame_scale')
     .eq('is_active', true)
     .order('display_order', { ascending: true })
 
@@ -29,9 +30,6 @@ type CreateAvatarBody = {
   display_order?: number
 }
 
-const REGIONS = ['TH', 'ID', 'VN', 'MY', 'CN', 'EN']
-const GENDERS = ['female', 'male', 'other']
-
 export async function POST(request: Request) {
   let body: CreateAvatarBody = {}
   try {
@@ -44,8 +42,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
   }
 
-  const region = body.region && REGIONS.includes(body.region) ? body.region : null
-  const gender = body.gender && GENDERS.includes(body.gender) ? body.gender : null
+  const region = body.region && (REGIONS as readonly string[]).includes(body.region) ? body.region : null
+  const gender = body.gender && (GENDERS as readonly string[]).includes(body.gender) ? body.gender : null
 
   const { data, error } = await supabaseAdmin
     .from('avatars')
