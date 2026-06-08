@@ -28,3 +28,7 @@ onnxruntime==1.19.2
 # numpy-2 hazard the lipsync image guards against.)
 numpy==1.26.4
 scipy==1.11.4
+# TikTok LIVE chat ingest (read-only). Pinned to the 6.0–6.4 range, which still
+# resolves against httpx<0.28 (supabase's ceiling above). If pip flags an httpx
+# conflict, drop TikTokLive a minor version rather than bumping httpx.
+TikTokLive>=6.0,<6.5

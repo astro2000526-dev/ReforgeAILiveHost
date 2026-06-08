@@ -7,6 +7,7 @@ from .render import router as render_router
 from .script import router as script_router
 from .stream import router as stream_router
 from .system import router as system_router
+from .tiktok import router as tiktok_router
 from .uploads import router as uploads_router
 
 all_routers = [
@@ -17,6 +18,7 @@ all_routers = [
     generate_router,
     stream_router,
     live_router,
+    tiktok_router,
     system_router,
     gpu_worker_router,
 ]
