@@ -5,7 +5,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import type { Avatar } from '@/lib/types'
+import type { Avatar, ReplyPreset } from '@/lib/types'
+import type { StreamDestination } from '@/lib/system-config'
 
 // ── Live Console ──────────────────────────────────────────────────────────────
 // One screen that drives the whole live: (A) a server-side Qwen loop keeps the
@@ -78,6 +79,8 @@ export default function LiveConsolePage() {
   const [topic, setTopic] = useState('')
   const [rtmpUrl, setRtmpUrl] = useState('')
   const [streamKey, setStreamKey] = useState('')
+  const [destinations, setDestinations] = useState<StreamDestination[]>([])
+  const [destId, setDestId] = useState('')
   const [autoSpeak, setAutoSpeak] = useState(true)
   const [language] = useState('th')
   const [busy, setBusy] = useState(false)
@@ -85,6 +88,10 @@ export default function LiveConsolePage() {
 
   // ── loop state (from SSE) ──
   const [loop, setLoop] = useState<LoopState | null>(null)
+
+  // ── reply preset (instruction + data + QA for /api/ai-reply) ──
+  const [presets, setPresets] = useState<ReplyPreset[]>([])
+  const [presetId, setPresetId] = useState('')
 
   // ── comments + replies ──
   const [autoReply, setAutoReply] = useState(true)
@@ -100,10 +107,12 @@ export default function LiveConsolePage() {
   const autoPostRef = useRef(autoPost)
   const autoSpeakRef = useRef(autoSpeak)
   const productRef = useRef(product)
+  const presetIdRef = useRef(presetId)
   useEffect(() => { autoReplyRef.current = autoReply }, [autoReply])
   useEffect(() => { autoPostRef.current = autoPost }, [autoPost])
   useEffect(() => { autoSpeakRef.current = autoSpeak }, [autoSpeak])
   useEffect(() => { productRef.current = product }, [product])
+  useEffect(() => { presetIdRef.current = presetId }, [presetId])
 
   const running = !!loop?.running
 
@@ -116,6 +125,35 @@ export default function LiveConsolePage() {
         const list = d.avatars ?? []
         setAvatars(list)
         if (list[0]?.id) setAvatarId((cur) => cur || list[0].id)
+      } catch { /* ignore */ }
+    })()
+  }, [])
+
+  // ── load saved stream destinations (from Settings) ──
+  useEffect(() => {
+    void (async () => {
+      try {
+        const r = await fetch('/api/config')
+        const d = (await r.json()) as { config?: { stream_destinations?: StreamDestination[] } }
+        setDestinations(d.config?.stream_destinations ?? [])
+      } catch { /* ignore */ }
+    })()
+  }, [])
+
+  // pick a saved destination → fill RTMP URL + stream key (still editable below)
+  function pickDestination(id: string) {
+    setDestId(id)
+    const dest = destinations.find((x) => x.id === id)
+    if (dest) { setRtmpUrl(dest.rtmp_url); setStreamKey(dest.stream_key) }
+  }
+
+  // ── load reply presets ──
+  useEffect(() => {
+    void (async () => {
+      try {
+        const r = await fetch('/api/reply-presets')
+        const d = (await r.json()) as { presets?: ReplyPreset[] }
+        setPresets(d.presets ?? [])
       } catch { /* ignore */ }
     })()
   }, [])
@@ -163,7 +201,7 @@ export default function LiveConsolePage() {
     try {
       const r = await fetch('/api/ai-reply', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ comment: c.message, product: productRef.current, language }),
+        body: JSON.stringify({ comment: c.message, product: productRef.current, language, preset_id: presetIdRef.current || undefined }),
       })
       const d = (await r.json()) as { reply?: string; error?: string }
       reply = d.reply ?? d.error ?? '—'
@@ -283,12 +321,46 @@ export default function LiveConsolePage() {
               <Input placeholder="เช่น โปรลดราคาวันนี้" value={topic} disabled={running} onChange={(e) => setTopic(e.target.value)} />
             </div>
             <div className="space-y-1.5">
+              <label className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+                <span>Preset ตอบคอมเมนต์</span>
+                <Link href="/live/presets" className="text-primary hover:underline">จัดการ</Link>
+              </label>
+              {/* not disabled while running — switching presets mid-live is intended */}
+              <select
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                value={presetId}
+                onChange={(e) => setPresetId(e.target.value)}
+              >
+                <option value="">— ค่าเริ่มต้น (ไม่ใช้ preset) —</option>
+                {presets.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <label className="flex items-center justify-between text-xs font-medium text-muted-foreground">
+                <span>ปลายทาง (Destination)</span>
+                <Link href="/settings" className="text-primary hover:underline">จัดการ</Link>
+              </label>
+              <select
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm disabled:opacity-50"
+                value={destId}
+                disabled={running}
+                onChange={(e) => pickDestination(e.target.value)}
+              >
+                <option value="">— กรอกเอง / ใช้ค่าจาก Settings —</option>
+                {destinations.map((d) => (
+                  <option key={d.id} value={d.id}>{d.label || d.platform}{d.stream_key ? '' : ' (ยังไม่มี key)'}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">RTMP URL <span className="opacity-60">(ว่าง = ใช้ค่าจาก Settings)</span></label>
-              <Input placeholder="rtmps://live-api-s.facebook.com:443/rtmp/" value={rtmpUrl} disabled={running} onChange={(e) => setRtmpUrl(e.target.value)} />
+              <Input placeholder="rtmps://live-api-s.facebook.com:443/rtmp/" value={rtmpUrl} disabled={running} onChange={(e) => { setRtmpUrl(e.target.value); setDestId('') }} />
             </div>
             <div className="space-y-1.5 sm:col-span-2">
               <label className="text-xs font-medium text-muted-foreground">Stream Key</label>
-              <Input placeholder="FB-xxxxxxxxxxxx" value={streamKey} disabled={running} onChange={(e) => setStreamKey(e.target.value)} />
+              <Input placeholder="FB-xxxxxxxxxxxx" value={streamKey} disabled={running} onChange={(e) => { setStreamKey(e.target.value); setDestId('') }} />
             </div>
           </div>
 

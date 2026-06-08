@@ -24,6 +24,24 @@ export type Avatar = {
   frame_scale?: number | null
 }
 
+// One curated question/answer pair inside a reply preset.
+export type QAPair = {
+  q: string
+  a: string
+}
+
+// AI comment-reply preset row as returned by the /api/reply-presets routes.
+export type ReplyPreset = {
+  id: string
+  name: string
+  instruction: string
+  data: string
+  qa: QAPair[]
+  is_active?: boolean | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
 // A single script segment (TTS-able line).
 export type Segment = {
   type: string

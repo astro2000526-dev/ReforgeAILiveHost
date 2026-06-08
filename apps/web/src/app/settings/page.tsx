@@ -7,8 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useI18n } from '@/components/LocaleProvider'
 import { KeyInput } from '@/components/KeyInput'
-import type { SystemConfig } from '@/lib/system-config'
-import { SYSTEM_CONFIG_DEFAULTS as DEFAULTS } from '@/lib/system-config'
+import type { SystemConfig, StreamDestination, StreamPlatform } from '@/lib/system-config'
+import { SYSTEM_CONFIG_DEFAULTS as DEFAULTS, STREAM_PLATFORMS } from '@/lib/system-config'
 import type { Appearance, AppFont, FontScale, Density } from '@/lib/appearance'
 import {
   APPEARANCE_DEFAULTS,
@@ -79,6 +79,25 @@ export default function SettingsPage() {
       setSaved(true); setTimeout(() => setSaved(false), 3000)
     } catch (err) { setError(err instanceof Error ? err.message : String(err)) }
     finally { setSaving(false) }
+  }
+
+  // ── stream destinations CRUD (saved RTMP push targets) ──
+  function addDestination(platform: StreamPlatform) {
+    const meta = STREAM_PLATFORMS[platform]
+    const dest: StreamDestination = {
+      id: crypto.randomUUID(),
+      platform,
+      label: meta.label,
+      rtmp_url: meta.rtmpUrl,
+      stream_key: '',
+    }
+    setCfg(p => ({ ...p, stream_destinations: [...(p.stream_destinations ?? []), dest] }))
+  }
+  function updateDestination(id: string, patch: Partial<StreamDestination>) {
+    setCfg(p => ({ ...p, stream_destinations: (p.stream_destinations ?? []).map(d => d.id === id ? { ...d, ...patch } : d) }))
+  }
+  function removeDestination(id: string) {
+    setCfg(p => ({ ...p, stream_destinations: (p.stream_destinations ?? []).filter(d => d.id !== id) }))
   }
 
   async function testLipsync() {
@@ -402,6 +421,69 @@ export default function SettingsPage() {
               onChange={(e) => setCfg(p => ({ ...p, lip_blend: Number(e.target.value) }))}
               className="w-full" />
             <p className="text-xs text-muted-foreground">{t('set.out.lipBlendHint')}</p>
+          </div>
+        </section>
+
+        {/* ── Stream destinations (saved RTMP targets: TikTok / FB / YouTube / Shopee) ── */}
+        <section className="rounded-lg border p-5 space-y-4">
+          <div>
+            <h2 className="font-semibold">ปลายทางสตรีม (Stream destinations)</h2>
+            <p className="text-xs text-muted-foreground">
+              บันทึก RTMP URL + Stream Key ของแต่ละแพลตฟอร์มไว้ล่วงหน้า แล้วเลือกใช้ได้ในหน้า Live Console
+            </p>
+          </div>
+
+          {(cfg.stream_destinations ?? []).length === 0 && (
+            <p className="text-xs text-muted-foreground">ยังไม่มีปลายทาง — เพิ่มได้จากปุ่มด้านล่าง</p>
+          )}
+
+          <div className="space-y-4">
+            {(cfg.stream_destinations ?? []).map((d) => (
+              <div key={d.id} className="rounded-md border border-border/70 bg-muted/20 p-3 space-y-3">
+                <div className="flex items-center gap-2">
+                  <select value={d.platform}
+                    onChange={e => {
+                      const platform = e.target.value as StreamPlatform
+                      const meta = STREAM_PLATFORMS[platform]
+                      // adopt the platform's server URL only when the field is blank or still
+                      // holds a previous platform's template — never clobber a hand-typed URL
+                      const isTemplate = !d.rtmp_url || Object.values(STREAM_PLATFORMS).some(m => m.rtmpUrl && m.rtmpUrl === d.rtmp_url)
+                      updateDestination(d.id, { platform, rtmp_url: isTemplate ? meta.rtmpUrl : d.rtmp_url })
+                    }}
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm">
+                    {(Object.keys(STREAM_PLATFORMS) as StreamPlatform[]).map(p => (
+                      <option key={p} value={p}>{STREAM_PLATFORMS[p].label}</option>
+                    ))}
+                  </select>
+                  <Input className="flex-1" placeholder="ชื่อปลายทาง (เช่น TikTok ร้านหลัก)"
+                    value={d.label} onChange={e => updateDestination(d.id, { label: e.target.value })} />
+                  <Button type="button" variant="ghost" size="sm"
+                    className="text-red-500 hover:text-red-700 hover:bg-red-50" aria-label="ลบปลายทาง"
+                    onClick={() => removeDestination(d.id)}>🗑</Button>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>RTMP / Server URL</Label>
+                  <Input placeholder={STREAM_PLATFORMS[d.platform].rtmpUrl || 'rtmp://…'}
+                    value={d.rtmp_url} onChange={e => updateDestination(d.id, { rtmp_url: e.target.value.trim() })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Stream Key</Label>
+                  <KeyInput placeholder="วาง stream key ที่นี่"
+                    changeLabel={t('set.key.change')} cancelLabel={t('set.key.cancel')}
+                    value={d.stream_key}
+                    onChange={v => updateDestination(d.id, { stream_key: v })} />
+                  <p className="text-xs text-muted-foreground">{STREAM_PLATFORMS[d.platform].keyHint}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap gap-2 pt-1">
+            {(Object.keys(STREAM_PLATFORMS) as StreamPlatform[]).map(p => (
+              <Button key={p} type="button" variant="outline" size="sm" onClick={() => addDestination(p)}>
+                + {STREAM_PLATFORMS[p].label}
+              </Button>
+            ))}
           </div>
         </section>
 

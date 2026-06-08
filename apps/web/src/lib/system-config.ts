@@ -1,5 +1,29 @@
 // Shared system config types + defaults (no server-only imports — safe for client components)
 
+// A saved RTMP push target. The pipeline only needs rtmp_url + stream_key; the
+// platform/label are presentation-only so the user can tell destinations apart
+// in the Live Console picker.
+export type StreamPlatform = 'tiktok' | 'facebook' | 'youtube' | 'shopee' | 'custom'
+
+export type StreamDestination = {
+  id: string
+  platform: StreamPlatform
+  label: string
+  rtmp_url: string
+  stream_key: string
+}
+
+// Per-platform metadata: display name + RTMP server template. TikTok / Shopee
+// hand out a fresh ingest URL per session (from LIVE Studio / Seller Centre), so
+// their url is left blank for the user to paste. Facebook / YouTube are stable.
+export const STREAM_PLATFORMS: Record<StreamPlatform, { label: string; rtmpUrl: string; keyHint: string }> = {
+  tiktok:   { label: 'TikTok LIVE',   rtmpUrl: '',                                             keyHint: 'จาก TikTok LIVE Studio → Stream → third-party (Server URL + Stream Key)' },
+  facebook: { label: 'Facebook Live', rtmpUrl: 'rtmps://live-api-s.facebook.com:443/rtmp/',    keyHint: 'จาก Facebook Live Producer → Streaming software' },
+  youtube:  { label: 'YouTube Live',  rtmpUrl: 'rtmp://a.rtmp.youtube.com/live2/',              keyHint: 'จาก YouTube Studio → Go Live → Stream key' },
+  shopee:   { label: 'Shopee Live',   rtmpUrl: '',                                             keyHint: 'จาก Shopee Seller Centre / Shopee LIVE app' },
+  custom:   { label: 'กำหนดเอง',       rtmpUrl: '',                                             keyHint: 'วาง RTMP URL + key ของปลายทางใดก็ได้' },
+}
+
 export type SystemConfig = {
   tts_provider: 'edge-tts' | 'azure' | 'volcengine'
   tts_voice: string
@@ -16,6 +40,7 @@ export type SystemConfig = {
   azure_speech_region: string
   default_rtmp_url: string
   default_duration: number
+  stream_destinations: StreamDestination[]  // saved RTMP push targets (TikTok / FB / YouTube / Shopee / custom)
   fb_page_token: string      // Facebook Page access token (for reading live comments + posting replies)
   fb_live_video_id: string   // Facebook live video id to poll comments from
   brave_api_key: string      // Brave Search API key for gallery news fetch (blank = Google News RSS)
@@ -41,6 +66,7 @@ export const SYSTEM_CONFIG_DEFAULTS: SystemConfig = {
   azure_speech_region: 'eastus',
   default_rtmp_url: 'rtmps://live-api-s.facebook.com:443/rtmp/',
   default_duration: 30,
+  stream_destinations: [],
   fb_page_token: '',
   fb_live_video_id: '',
   brave_api_key: '',
