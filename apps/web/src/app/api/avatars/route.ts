@@ -6,18 +6,26 @@ import { NextResponse } from 'next/server'
 
 import { GENDERS, REGIONS } from '@/lib/constants'
 import { supabaseAdmin } from '@/lib/supabase-server'
+import {
+  AVATAR_FULL_COLS, AVATAR_BASE_COLS, isMissingColumn, withAvatarDefaults,
+} from '@/lib/server/schema-drift'
 
 export async function GET() {
-  const { data, error } = await supabaseAdmin
-    .from('avatars')
-    .select('id, name, preview_image_url, template_video_url, region, gender, display_order, description, is_active, bg_remove, background_url, background_type, camera_zoom, frame_position, frame_scale')
-    .eq('is_active', true)
-    .order('display_order', { ascending: true })
+  const run = (cols: string) =>
+    supabaseAdmin
+      .from('avatars')
+      .select(cols)
+      .eq('is_active', true)
+      .order('display_order', { ascending: true })
+
+  // Tolerate a DB that hasn't run 0005/0006: retry with base columns.
+  let { data, error } = await run(AVATAR_FULL_COLS)
+  if (error && isMissingColumn(error)) ({ data, error } = await run(AVATAR_BASE_COLS))
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-  return NextResponse.json({ avatars: data ?? [] })
+  return NextResponse.json({ avatars: (data ?? []).map((r) => withAvatarDefaults(r as unknown as Record<string, unknown>)) })
 }
 
 type CreateAvatarBody = {

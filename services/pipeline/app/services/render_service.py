@@ -23,6 +23,7 @@ from ..media import (
     loudnorm_af,
     run_ffmpeg_progress,
     scale_vf,
+    x264_args,
 )
 from ..schemas import RenderRequest
 from . import tts_service
@@ -83,8 +84,10 @@ async def render_ai(req: RenderRequest, out_path: Path) -> list[str]:
     raw_audio = OUTPUT_DIR / f".{pid}.tts.raw"
     await tts_service.tts_to_file(req.script_text.strip(), req.voice, req.rate, raw_audio,
                                   azure_key=req.azure_key, azure_region=req.azure_region,
+                                  google_key=req.google_key, provider=req.tts_provider,
                                   sovits=(req.tts_engine == "sovits"),
-                                  pitch=req.tts_pitch, emotion=req.tts_emotion)
+                                  pitch=req.tts_pitch, emotion=req.tts_emotion,
+                                  engine_prefs={"sovits_url": req.sovits_url})
     audio_path = OUTPUT_DIR / f".{pid}.tts.wav"
     dur_cap = max(1, min(int(req.duration_seconds or 15), 1800))  # AI clips: cap 30 min
     trim = await asyncio.to_thread(
@@ -143,12 +146,11 @@ async def render_ai(req: RenderRequest, out_path: Path) -> list[str]:
     )
     state.render_jobs[pid] = {**state.render_jobs[pid], "pct": 80, "source": "ai-encode"}
 
-    # 3) normalize for streaming (faststart, quality-capped) → out_path
+    # 3) normalize for streaming (faststart, quality per tier) → out_path
     cmd = [
         FFMPEG_BIN, "-y", "-i", str(raw),
         "-vf", scale_vf(req.video_quality),
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "28", "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "96k", "-ar", "44100", "-movflags", "+faststart",
+        *x264_args(req.video_quality),
         str(out_path),
     ]
     proc = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True)
@@ -215,52 +217,64 @@ async def do_render(req: RenderRequest) -> None:
         return pid in state.render_cancel
 
     try:
-        # AI lip-sync path first (falls through to loop on any failure).
+        source: str | None = None
+        # AI lip-sync path first. ONLY a render_ai() failure falls through to the
+        # loop path — the composite/speed finalize stages run in the common block
+        # below, so a finalize hiccup can't discard a good AI clip + re-render it.
         if req.mode == "ai":
             try:
-                warns = await render_ai(req, out_path)
-                if _cancelled():
-                    state.render_jobs[pid] = {"status": "cancelled", "pct": 0}
-                    return
-                warns += await apply_composite_stage(req, out_path)
-                await asyncio.to_thread(apply_speed_sync, out_path, req.playback_speed)
-                state.render_jobs[pid] = {"status": "done", "pct": 100, "source": "ai",
-                                          "output_url": output_url, "errors": warns}
-                return
+                errors += await render_ai(req, out_path)
+                source = "ai"
             except Exception as e:
                 errors.append(f"AI render failed, fell back to loop: {type(e).__name__}: {str(e)[:200]}")
                 log.warning("AI render failed for %s: %s", pid, e)
 
-        template_input, err = await resolve_template(req.template_url)
-        if err:
-            errors.append(err)
+        if source is None:
+            template_input, err = await resolve_template(req.template_url)
+            if err:
+                errors.append(err)
+            # Encode at the requested tier (was a flat crf 28 / 1080 cap).
+            encode = x264_args(req.video_quality)
+            vf = scale_vf(req.video_quality)
 
-        _ENCODE = [
-            "-vf", "scale='min(1080,iw)':'min(1920,ih)':force_original_aspect_ratio=decrease:flags=lanczos,"
-                   "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "28", "-pix_fmt", "yuv420p",
-            "-maxrate", "4000k", "-bufsize", "8000k",
-            "-force_key_frames", "expr:gte(t,n_forced*2)",
-            "-c:a", "aac", "-b:a", "96k", "-ar", "44100", "-movflags", "+faststart",
-        ]
-        if template_input:
-            source = "template"
-            cmd = [FFMPEG_BIN, "-y", "-stream_loop", "-1", "-i", template_input, "-t", str(dur), *_ENCODE, "-shortest", str(out_path)]
-        else:
-            source = "testpattern"
-            cmd = [FFMPEG_BIN, "-y",
-                   "-f", "lavfi", "-i", f"testsrc2=size=720x1280:rate=25:duration={dur}",
-                   "-f", "lavfi", "-i", f"anullsrc=channel_layout=stereo:sample_rate=44100:duration={dur}",
-                   "-t", str(dur), *_ENCODE, "-shortest", str(out_path)]
+            def _testpattern_cmd() -> list[str]:
+                return [FFMPEG_BIN, "-y",
+                        "-f", "lavfi", "-i", f"testsrc2=size=720x1280:rate=25:duration={dur}",
+                        "-f", "lavfi", "-i", f"anullsrc=channel_layout=stereo:sample_rate=44100:duration={dur}",
+                        "-t", str(dur), "-vf", vf, *encode, "-shortest", str(out_path)]
 
-        log.info("render project=%s dur=%ss source=%s", pid, dur, source)
-        proc = await asyncio.to_thread(_run_ffmpeg_progress, cmd, dur, pid, source)
-        if proc.returncode != 0:
-            state.render_jobs[pid] = {"status": "failed", "pct": 0, "source": source,
-                                      "errors": errors + [f"ffmpeg failed: {proc.stderr[-300:]}"]}
+            if template_input:
+                source = "template"
+                cmd = [FFMPEG_BIN, "-y", "-stream_loop", "-1", "-i", template_input, "-t", str(dur),
+                       "-vf", vf, *encode, "-shortest", str(out_path)]
+            else:
+                source = "testpattern"
+                cmd = _testpattern_cmd()
+
+            log.info("render project=%s dur=%ss source=%s", pid, dur, source)
+            proc = await asyncio.to_thread(_run_ffmpeg_progress, cmd, dur, pid, source)
+            # "Stream any clip": a template that HEAD-checked OK but won't decode
+            # (placeholder/corrupt/non-video URL) must NOT fail the render — fall
+            # back to the test pattern so the stream always gets a playable clip.
+            if proc.returncode != 0 and source == "template":
+                errors.append(f"template would not encode ({proc.stderr[-160:]}) — used test pattern")
+                log.warning("render %s: template encode failed, falling back to testpattern", pid)
+                source = "testpattern"
+                proc = await asyncio.to_thread(_run_ffmpeg_progress, _testpattern_cmd(), dur, pid, source)
+            if proc.returncode != 0:
+                state.render_jobs[pid] = {"status": "failed", "pct": 0, "source": source,
+                                          "errors": errors + [f"ffmpeg failed: {proc.stderr[-300:]}"]}
+                return
+
+        if _cancelled():
+            state.render_jobs[pid] = {"status": "cancelled", "pct": 0}
             return
+
+        # Common finalize for BOTH paths — best-effort, never triggers a fallback.
         errors += await apply_composite_stage(req, out_path)
-        await asyncio.to_thread(apply_speed_sync, out_path, req.playback_speed)
+        spd_ok = await asyncio.to_thread(apply_speed_sync, out_path, req.playback_speed, req.video_quality)
+        if spd_ok is False:
+            errors.append("playback speed change failed — kept original-speed clip")
         state.render_jobs[pid] = {"status": "done", "pct": 100, "source": source,
                                   "output_url": output_url, "errors": errors}
     except Exception as e:

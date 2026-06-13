@@ -4,20 +4,26 @@
 import { NextResponse } from 'next/server'
 import { BG_TYPES, FRAME_POSITIONS, GENDERS, REGIONS } from '@/lib/constants'
 import { supabaseAdmin } from '@/lib/supabase-server'
+import {
+  AVATAR_FULL_COLS, AVATAR_BASE_COLS, AVATAR_EXT_KEYS,
+  isMissingColumn, withAvatarDefaults,
+} from '@/lib/server/schema-drift'
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const { data, error } = await supabaseAdmin
-    .from('avatars')
-    .select('id,name,preview_image_url,template_video_url,region,gender,description,display_order,is_active,bg_remove,background_url,background_type,camera_zoom,frame_position,frame_scale')
-    .eq('id', id)
-    .maybeSingle()
+  const run = (cols: string) =>
+    supabaseAdmin.from('avatars').select(cols).eq('id', id).maybeSingle()
+
+  // Tolerate a DB behind 0005/0006: fall back to base columns + defaults.
+  let { data, error } = await run(AVATAR_FULL_COLS)
+  if (error && isMissingColumn(error)) ({ data, error } = await run(AVATAR_BASE_COLS))
+
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'not found' }, { status: 404 })
-  return NextResponse.json({ avatar: data })
+  return NextResponse.json({ avatar: withAvatarDefaults(data as unknown as Record<string, unknown>) })
 }
 
 type Body = {
@@ -64,13 +70,27 @@ export async function PATCH(
   if (!Object.keys(patch).length)
     return NextResponse.json({ error: 'nothing to update' }, { status: 400 })
 
-  const { data, error } = await supabaseAdmin
-    .from('avatars').update(patch).eq('id', id)
-    .select('id,name,preview_image_url,template_video_url,region,gender,description,display_order,is_active,bg_remove,background_url,background_type,camera_zoom,frame_position,frame_scale')
-    .single()
+  const runUpdate = (p: Record<string, unknown>, cols: string) =>
+    supabaseAdmin.from('avatars').update(p).eq('id', id).select(cols).maybeSingle()
+
+  let { data, error } = await runUpdate(patch, AVATAR_FULL_COLS)
+  // DB behind 0005/0006: drop the not-yet-existing columns from the patch and
+  // retry with base columns so the editable base fields still save.
+  if (error && isMissingColumn(error)) {
+    const basePatch: Record<string, unknown> = { ...patch }
+    for (const k of AVATAR_EXT_KEYS) delete basePatch[k]
+    if (Object.keys(basePatch).length) {
+      ;({ data, error } = await runUpdate(basePatch, AVATAR_BASE_COLS))
+    } else {
+      // Patch touched only not-yet-existing columns → no-op; return current row.
+      ;({ data, error } = await supabaseAdmin
+        .from('avatars').select(AVATAR_BASE_COLS).eq('id', id).maybeSingle())
+    }
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ avatar: data })
+  if (!data) return NextResponse.json({ error: 'not found' }, { status: 404 })
+  return NextResponse.json({ avatar: withAvatarDefaults(data as unknown as Record<string, unknown>) })
 }
 
 export async function DELETE(

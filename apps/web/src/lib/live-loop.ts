@@ -16,6 +16,7 @@ import 'server-only'
 
 import { pipelineFetch } from '@/lib/pipeline-client'
 import { gwHeaders, gwUrl } from '@/lib/server/db-gateway'
+import { isMissingColumn, withAvatarDefaults } from '@/lib/server/schema-drift'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { getSystemConfig } from '@/lib/system-config-server'
 import type { AvatarJoin } from '@/lib/types'
@@ -65,6 +66,13 @@ const VOICE_BY_LANG: Record<string, string> = {
   th: 'th-TH-PremwadeeNeural',
   zh: 'BV001_streaming',
   en: 'en-US-JennyNeural',
+}
+// Google Cloud TTS uses its own voice ids; pick by language so the pipeline
+// doesn't have to guess a locale (a Volcengine "BV…" id has no locale prefix).
+const GOOGLE_VOICE_BY_LANG: Record<string, string> = {
+  th: 'th-TH-Standard-A',
+  zh: 'cmn-CN-Standard-A',
+  en: 'en-US-Neural2-F',
 }
 
 // ── singleton store (survives HMR in dev, shared across route modules) ─────────
@@ -141,12 +149,14 @@ async function readPersisted(): Promise<{ running?: boolean; settings?: LiveLoop
 type AvatarRow = AvatarJoin & { id: string; voice?: string | null }
 
 async function loadAvatar(avatarId: string): Promise<AvatarRow | null> {
-  const { data } = await supabaseAdmin
-    .from('avatars')
-    .select('id, template_video_url, preview_image_url, bg_remove, background_url, background_type, camera_zoom, frame_position, frame_scale')
-    .eq('id', avatarId)
-    .maybeSingle<AvatarRow>()
-  return data ?? null
+  const FULL = 'id, template_video_url, preview_image_url, bg_remove, background_url, background_type, camera_zoom, frame_position, frame_scale'
+  const BASE = 'id, template_video_url, preview_image_url'
+  const run = (cols: string) =>
+    supabaseAdmin.from('avatars').select(cols).eq('id', avatarId).maybeSingle()
+  // Tolerate a DB behind 0005/0006: fall back to base columns + ext defaults.
+  let { data, error } = await run(FULL)
+  if (error && isMissingColumn(error)) ({ data, error } = await run(BASE))
+  return (withAvatarDefaults(data as unknown as Record<string, unknown> | null) as AvatarRow | null) ?? null
 }
 
 // ── script generation (Qwen continuous-host loop) ─────────────────────────────
@@ -203,7 +213,9 @@ async function startSession(s: LiveLoopState, settings: LiveLoopSettings): Promi
 
   const faceSource = avatar.template_video_url || avatar.preview_image_url || null
   const lang = settings.language in VOICE_BY_LANG ? settings.language : 'th'
-  const voice = VOICE_BY_LANG[lang]
+  // Match the voice id family to the selected TTS provider so the pipeline
+  // routes to the right engine (Google needs a Google voice id, etc.).
+  const voice = cfg.tts_provider === 'google' ? GOOGLE_VOICE_BY_LANG[lang] : VOICE_BY_LANG[lang]
   const rtmp = settings.rtmp_url?.trim() || cfg.default_rtmp_url
 
   // First chunk so the live opens with real speech (not silence).
@@ -229,7 +241,15 @@ async function startSession(s: LiveLoopState, settings: LiveLoopSettings): Promi
       lip_blend: typeof cfg.lip_blend === 'number' ? cfg.lip_blend : 30,
       azure_key: cfg.azure_speech_key || null,
       azure_region: cfg.azure_speech_region || 'eastus',
-      tts_engine: cfg.tts_provider,
+      google_key: cfg.google_tts_key || null,
+      tts_provider: cfg.tts_provider,
+      // BUGFIX: the pipeline only treats tts_engine === 'sovits' specially;
+      // passing the provider name here (old behavior) silently disabled SoVITS
+      // for live streams. Send the actual engine + sovits params instead.
+      tts_engine: cfg.sovits_enabled ? 'sovits' : null,
+      tts_pitch: Number(cfg.tts_pitch) || 0,
+      tts_emotion: cfg.tts_emotion || null,
+      sovits_url: cfg.sovits_url || null,
     }),
   })
   if (!res.ok) throw new Error(`live/start: ${res.error.message}`)

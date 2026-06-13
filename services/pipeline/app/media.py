@@ -98,6 +98,38 @@ def scale_vf(quality: str) -> str:
             "scale=trunc(iw/2)*2:trunc(ih/2)*2")
 
 
+# Quality-tier H.264 encode settings. CRF drives visual quality (lower = better)
+# at ~constant CPU cost, so we drop from the old flat crf=28 (visibly soft on a
+# 1080p product clip) to a per-tier crf for a big quality lift with a negligible
+# speed hit — the realtime lever is `preset`, NOT crf, and we keep preset fast.
+_QUALITY_CRF = {"1080p": 21, "720p": 22, "480p": 24}
+_QUALITY_MAXRATE = {"1080p": "6000k", "720p": "3500k", "480p": "1500k"}
+_QUALITY_BUFSIZE = {"1080p": "12000k", "720p": "7000k", "480p": "3000k"}
+
+
+def x264_args(quality: str, *, preset: str = "veryfast",
+              audio_bitrate: str = "128k", gop_keyframes: bool = True,
+              faststart: bool = True) -> list[str]:
+    """Shared libx264 + AAC encode args, tuned per video_quality tier.
+
+    One source of truth for encode quality so every path (AI render, loop
+    fallback, speed-sync re-encode) lands on the same crf/maxrate for a tier
+    instead of the old scattered crf=28. `preset` stays the realtime knob."""
+    q = quality if quality in _QUALITY_CRF else "1080p"
+    args = [
+        "-c:v", "libx264", "-preset", preset, "-crf", str(_QUALITY_CRF[q]),
+        "-maxrate", _QUALITY_MAXRATE[q], "-bufsize", _QUALITY_BUFSIZE[q],
+        "-pix_fmt", "yuv420p",
+    ]
+    if gop_keyframes:
+        # Fixed 2s keyframe cadence — RTMP-friendly + clean -stream_loop joins.
+        args += ["-force_key_frames", "expr:gte(t,n_forced*2)"]
+    args += ["-c:a", "aac", "-b:a", audio_bitrate, "-ar", "44100"]
+    if faststart:
+        args += ["-movflags", "+faststart"]
+    return args
+
+
 def lipsync_max_edge(quality: str) -> int:
     # Lip-sync long-edge cap follows the requested video_quality so we never
     # process at a higher res than the final encode keeps (wasted GPU/RAM),
@@ -168,17 +200,29 @@ async def mux_audio_onto_video(
     return output_path
 
 
-async def transcode_for_streaming(input_path: Path, output_path: Path) -> Path:
+# Per-tier streaming bitrate ceiling (was a flat uncapped -b:v 3000k: too low for
+# clean 1080p motion, wasteful for 480p, and uncapped ABR can spike and trip RTMP
+# ingest). maxrate/bufsize give an RTMP-safe ceiling.
+_STREAM_BV = {"1080p": "6000k", "720p": "3500k", "480p": "1500k"}
+_STREAM_MAXRATE = {"1080p": "7000k", "720p": "4000k", "480p": "1800k"}
+_STREAM_BUFSIZE = {"1080p": "12000k", "720p": "7000k", "480p": "3000k"}
+
+
+async def transcode_for_streaming(
+    input_path: Path, output_path: Path, video_quality: str = "1080p"
+) -> Path:
     """Prepare a stream-friendly version of the final video.
 
     Decision (Day 0 review #3): bake fixed-cadence keyframes (GOP=2s) and clean
     PTS so that `-stream_loop -1` doesn't produce PTS jumps that Shopee's
     ingestion treats as freezes/disconnects.
     """
+    q = video_quality if video_quality in _STREAM_BV else "1080p"
     await _run([
         FFMPEG_BIN, "-y",
         "-i", str(input_path),
-        "-c:v", "libx264", "-preset", "veryfast", "-b:v", "3000k",
+        "-c:v", "libx264", "-preset", "veryfast",
+        "-b:v", _STREAM_BV[q], "-maxrate", _STREAM_MAXRATE[q], "-bufsize", _STREAM_BUFSIZE[q],
         "-force_key_frames", "expr:gte(t,n_forced*2)",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
@@ -204,11 +248,18 @@ def compress_video(src: Path, dst: Path) -> bool:
         return False
 
 
-def apply_speed_sync(path: Path, speed: float) -> None:
+def apply_speed_sync(path: Path, speed: float, quality: str = "1080p") -> bool:
     """Slow/speed the finished clip while KEEPING A/V sync (video setpts +
-    audio atempo by the same factor). speed<1 = slower. No-op if ~1.0."""
+    audio atempo by the same factor). speed<1 = slower. No-op if ~1.0.
+
+    This is a SECOND pass over an already-encoded clip, so it must not be the
+    quality bottleneck: it re-encodes at the same per-tier crf as the main
+    encode (was a flat crf=28 that visibly degraded the finished video).
+
+    Returns True on success or no-op; False if the re-encode failed (so the
+    caller can surface a warning instead of silently shipping original speed)."""
     if abs(speed - 1.0) < 0.01:
-        return
+        return True
     speed = max(0.25, min(2.0, speed))
     setpts = round(1.0 / speed, 4)
     tmp = path.with_suffix(".spd.mp4")
@@ -216,12 +267,18 @@ def apply_speed_sync(path: Path, speed: float) -> None:
         FFMPEG_BIN, "-y", "-i", str(path),
         "-filter_complex", f"[0:v]setpts={setpts}*PTS[v];[0:a]atempo={speed}[a]",
         "-map", "[v]", "-map", "[a]",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "28", "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", str(tmp),
+        *x264_args(quality, gop_keyframes=False),
+        str(tmp),
     ]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True)
+    except Exception:
+        return False
     if r.returncode == 0 and tmp.exists():
         tmp.replace(path)
+        return True
+    tmp.unlink(missing_ok=True)
+    return False
 
 
 def run_ffmpeg_progress(

@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server'
 
 import { sanitizeQA } from '@/lib/reply-presets'
+import { isMissingRelation } from '@/lib/server/schema-drift'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import type { QAPair } from '@/lib/types'
 
@@ -20,6 +21,7 @@ export async function GET(
     .select(SELECT)
     .eq('id', id)
     .maybeSingle()
+  if (error && isMissingRelation(error)) return NextResponse.json({ error: 'not found' }, { status: 404 })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'not found' }, { status: 404 })
   return NextResponse.json({ preset: data })
@@ -55,9 +57,12 @@ export async function PATCH(
   const { data, error } = await supabaseAdmin
     .from('reply_presets').update(patch).eq('id', id)
     .select(SELECT)
-    .single()
+    .maybeSingle()
 
+  if (error && isMissingRelation(error))
+    return NextResponse.json({ error: 'preset storage not provisioned — apply DB migration 0007_reply_presets' }, { status: 503 })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!data) return NextResponse.json({ error: 'not found' }, { status: 404 })
   return NextResponse.json({ preset: data })
 }
 
@@ -68,6 +73,7 @@ export async function DELETE(
   const { id } = await params
   const { error } = await supabaseAdmin
     .from('reply_presets').update({ is_active: false }).eq('id', id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // No table (0007 not applied) → nothing to delete; treat as success.
+  if (error && !isMissingRelation(error)) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }

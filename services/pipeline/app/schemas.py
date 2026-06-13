@@ -19,6 +19,7 @@ class GenerateRequest(BaseModel):
     # Caller-supplied UUID that namespaces the Storage upload. Optional for
     # legacy callers / smoke scripts (we fall back to project_id).
     generation_id: str | None = None
+    video_quality: str = "1080p"   # 1080p | 720p | 480p — streaming bitrate tier
 
 
 class GenerateResponse(BaseModel):
@@ -81,8 +82,10 @@ class RenderRequest(BaseModel):
     rate: str = "+0%"
     # --- TTS engine selection (None = current chain; "sovits" = GPT-SoVITS first) ---
     tts_engine: str | None = None            # "sovits" | None
+    tts_provider: str | None = None          # explicit Settings choice: google|azure|edge-tts
     tts_pitch: float = 0.0                    # semitones -12..12 (sovits)
     tts_emotion: str | None = None            # emotion tag (sovits, best-effort)
+    sovits_url: str | None = None            # GPT-SoVITS service URL (else pipeline env default)
     voice_clone: bool = False                # clone avatar's voice (OpenVoice)
     playback_speed: float = 1.0              # final clip speed; <1 = slower (keeps A/V sync)
     output_name: str | None = None           # versioned output filename (else project_id)
@@ -91,6 +94,7 @@ class RenderRequest(BaseModel):
     lip_blend: int = 30                      # 0..100 feather lip-crop edge (ความเนียน)
     azure_key: str | None = None             # Azure Speech key (from Settings); overrides env
     azure_region: str | None = None          # Azure region, e.g. eastus
+    google_key: str | None = None            # Google Cloud TTS API key (from Settings); overrides env
     lipsync_model: str | None = None         # wav2lip | musetalk — switch engine to match Settings
     # --- Per-presenter background & camera (from the avatar's settings) ---
     bg_remove: bool = False                  # matte the person out (rembg)

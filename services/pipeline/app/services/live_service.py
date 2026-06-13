@@ -67,9 +67,12 @@ class LiveSession:
     lip_blend: int
     azure_key: str | None
     azure_region: str | None
+    google_key: str | None
     tts_engine: str | None
+    tts_provider: str | None
     tts_pitch: float
     tts_emotion: str | None
+    sovits_url: str | None
     work: Path
     canvas: tuple[int, int] = (720, 1280)
     queue: deque = field(default_factory=deque)      # pending text chunks
@@ -84,6 +87,7 @@ class LiveSession:
     feeder: threading.Thread | None = None
     renderer: asyncio.Task | None = None
     filler: Path | None = None
+    filler_bytes: bytes | None = None   # filler.ts cached in RAM (re-read every starve loop otherwise)
     filler_dur: float = 0.0
     stop_flag: bool = False
     lock: threading.Lock = field(default_factory=threading.Lock)
@@ -126,57 +130,64 @@ async def _render_segment(s: LiveSession, text: str, idx: int) -> Path:
     mp4 = seg_dir / f".{idx:06d}.mp4"
     ts = seg_dir / f"{idx:06d}.ts"
 
-    # 1) TTS (same chain as renders; sovits-first when enabled)
-    await tts_service.tts_to_file(
-        text.strip(), s.voice, s.rate, raw_audio,
-        azure_key=s.azure_key, azure_region=s.azure_region,
-        sovits=(s.tts_engine == "sovits"), pitch=s.tts_pitch, emotion=s.tts_emotion,
-    )
-    await asyncio.to_thread(_run, [
-        FFMPEG_BIN, "-y", "-i", str(raw_audio),
-        "-af", loudnorm_af(s.sound_mode), "-ar", "16000", "-ac", "1", str(wav),
-    ], "live tts normalize")
-    raw_audio.unlink(missing_ok=True)
-
-    # 2) presenter video for this chunk
-    if s.lipsync_url and s.avatar_image_url:
-        await get_gpu().lipsync(
-            avatar_url=s.avatar_image_url, audio_path=wav, out_path=mp4,
-            max_edge=lipsync_max_edge(s.video_quality), lip_blend=s.lip_blend,
-            model=s.lipsync_model, lipsync_url=s.lipsync_url,
+    try:
+        # 1) TTS (same chain as renders; sovits-first when enabled)
+        await tts_service.tts_to_file(
+            text.strip(), s.voice, s.rate, raw_audio,
+            azure_key=s.azure_key, azure_region=s.azure_region,
+            google_key=s.google_key, provider=s.tts_provider,
+            sovits=(s.tts_engine == "sovits"), pitch=s.tts_pitch, emotion=s.tts_emotion,
+            engine_prefs={"sovits_url": s.sovits_url},
         )
-    else:
-        template = local_path_for(s.template_url) or s.template_url
-        done = False
-        if template:
-            # No lip-sync available: loop the template under the TTS audio.
-            try:
+        await asyncio.to_thread(_run, [
+            FFMPEG_BIN, "-y", "-i", str(raw_audio),
+            "-af", loudnorm_af(s.sound_mode), "-ar", "16000", "-ac", "1", str(wav),
+        ], "live tts normalize")
+
+        # 2) presenter video for this chunk
+        if s.lipsync_url and s.avatar_image_url:
+            await get_gpu().lipsync(
+                avatar_url=s.avatar_image_url, audio_path=wav, out_path=mp4,
+                max_edge=lipsync_max_edge(s.video_quality), lip_blend=s.lip_blend,
+                model=s.lipsync_model, lipsync_url=s.lipsync_url,
+            )
+        else:
+            template = local_path_for(s.template_url) or s.template_url
+            done = False
+            if template:
+                # No lip-sync available: loop the template under the TTS audio.
+                try:
+                    await asyncio.to_thread(_run, [
+                        FFMPEG_BIN, "-y", "-stream_loop", "-1", "-i", str(template),
+                        "-i", str(wav), "-map", "0:v:0", "-map", "1:a:0",
+                        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+                        "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(mp4),
+                    ], "live template mux")
+                    done = True
+                except Exception as e:
+                    log.warning("live %s: template mux failed (%s) — test pattern", s.session_id, e)
+            if not done:
+                dur = max(1.0, probe_duration(wav))
                 await asyncio.to_thread(_run, [
-                    FFMPEG_BIN, "-y", "-stream_loop", "-1", "-i", str(template),
+                    FFMPEG_BIN, "-y",
+                    "-f", "lavfi", "-i", f"testsrc2=size={s.canvas[0]}x{s.canvas[1]}:rate=25:duration={dur:.2f}",
                     "-i", str(wav), "-map", "0:v:0", "-map", "1:a:0",
                     "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
                     "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(mp4),
-                ], "live template mux")
-                done = True
-            except Exception as e:
-                log.warning("live %s: template mux failed (%s) — test pattern", s.session_id, e)
-        if not done:
-            dur = max(1.0, probe_duration(wav))
-            await asyncio.to_thread(_run, [
-                FFMPEG_BIN, "-y",
-                "-f", "lavfi", "-i", f"testsrc2=size={s.canvas[0]}x{s.canvas[1]}:rate=25:duration={dur:.2f}",
-                "-i", str(wav), "-map", "0:v:0", "-map", "1:a:0",
-                "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-                "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(mp4),
-            ], "live testpattern mux")
-    wav.unlink(missing_ok=True)
+                ], "live testpattern mux")
 
-    # 3) normalize to the session canvas as MPEG-TS (gapless concat unit)
-    await asyncio.to_thread(_run, [
-        FFMPEG_BIN, "-y", "-i", str(mp4), *_ts_encode_args(*s.canvas), str(ts),
-    ], "live ts encode")
-    mp4.unlink(missing_ok=True)
-    return ts
+        # 3) normalize to the session canvas as MPEG-TS (gapless concat unit)
+        await asyncio.to_thread(_run, [
+            FFMPEG_BIN, "-y", "-i", str(mp4), *_ts_encode_args(*s.canvas), str(ts),
+        ], "live ts encode")
+        return ts
+    finally:
+        # Always drop the intermediates — a mid-chain failure (TTS/GPU/ffmpeg)
+        # must not leave .raw/.wav/.mp4 behind for the life of a 24/7 stream.
+        # `ts` is the return value on success, so it is NOT cleaned here.
+        raw_audio.unlink(missing_ok=True)
+        wav.unlink(missing_ok=True)
+        mp4.unlink(missing_ok=True)
 
 
 async def _render_filler(s: LiveSession) -> None:
@@ -203,14 +214,37 @@ async def _render_filler(s: LiveSession) -> None:
     if not template:
         await _encode(["-f", "lavfi", "-i", f"testsrc2=size={s.canvas[0]}x{s.canvas[1]}:rate=25:duration=8"])
     s.filler = out
+    s.filler_bytes = out.read_bytes()   # cache once; feeder replays from RAM, not disk
     s.filler_dur = probe_duration(out) or 8.0
+
+
+def _signal_failed(s: LiveSession) -> None:
+    """Converge a session that hit a terminal failure WITHOUT an explicit
+    /live/stop. Sets stop_flag so the renderer + feeder `while not s.stop_flag`
+    loops exit, and terminates the emitter so it stops pushing to RTMP (a fresh
+    session id will spin up a new one on restart). Idempotent + thread-safe;
+    callable from the feeder thread or the renderer task. Does NOT join threads
+    (would deadlock if called from the feeder) or rmtree work (the surviving
+    thread may still touch files) — stop_live() does the full teardown."""
+    s.stop_flag = True
+    em = s.emitter
+    if em is not None and em.poll() is None:
+        try:
+            em.terminate()
+        except Exception:
+            pass
 
 
 async def _renderer_loop(s: LiveSession) -> None:
     idx = 0
     try:
         await _render_filler(s)
-        s.state = "live"
+        # Promote to live ONLY from the pre-live state AND only if no terminal
+        # failure was signalled (stop_flag) during the multi-second filler render
+        # above — never resurrect a session the emitter/feeder already failed.
+        with s.lock:
+            if s.state == "starting" and not s.stop_flag:
+                s.state = "live"
         while not s.stop_flag:
             if s.buffered < LOOKAHEAD_SECONDS and s.queue:
                 text = s.queue.popleft()
@@ -222,7 +256,10 @@ async def _renderer_loop(s: LiveSession) -> None:
                     s.error = f"segment {idx} failed: {type(e).__name__}: {str(e)[:160]}"
                     idx += 1
                     continue
-                dur = probe_duration(seg)
+                # Floor the duration: a 0.0 probe (unreadable .ts) would never
+                # count toward LOOKAHEAD, defeating the throttle and busy-spinning
+                # the renderer. Match the floor used elsewhere in this file.
+                dur = max(1.0, probe_duration(seg))
                 with s.lock:
                     s.segments.append((seg, dur))
                     s.buffered += dur
@@ -236,6 +273,9 @@ async def _renderer_loop(s: LiveSession) -> None:
         log.exception("live %s: renderer died", s.session_id)
         s.error = f"renderer: {type(e).__name__}: {str(e)[:160]}"
         s.state = "failed"
+        # Converge the other threads: the feeder + emitter would otherwise keep
+        # pushing filler to RTMP forever for a stream whose producer is dead.
+        _signal_failed(s)
 
 
 def _feeder_loop(s: LiveSession, fifo: Path) -> None:
@@ -248,28 +288,37 @@ def _feeder_loop(s: LiveSession, fifo: Path) -> None:
                     if s.segments:
                         item = s.segments.popleft()
                 if item is None:
-                    if s.filler is not None:
-                        f.write(s.filler.read_bytes())
+                    if s.filler_bytes is not None:
+                        f.write(s.filler_bytes)   # cached in RAM, not re-read from disk
                         f.flush()
                         s.filler_fed += 1
                         continue
                     time.sleep(0.2)
                     continue
                 path, dur = item
-                f.write(path.read_bytes())
-                f.flush()
+                # Decrement when the segment LEAVES the unfed deque (it's now
+                # draining to the emitter in realtime), so `buffered` tracks the
+                # deque contents and the renderer refills the one now in-flight.
                 with s.lock:
                     s.buffered = max(0.0, s.buffered - dur)
+                f.write(path.read_bytes())
+                f.flush()
                 s.fed_count += 1
                 path.unlink(missing_ok=True)
     except BrokenPipeError:
         if not s.stop_flag:
-            s.error = "emitter closed the pipe (RTMP push died)"
-            s.state = "failed"
+            with s.lock:                       # lock-ordered vs the renderer promotion
+                s.stop_flag = True
+                s.state = "failed"
+                s.error = "emitter closed the pipe (RTMP push died)"
+            _signal_failed(s)
     except Exception as e:
         if not s.stop_flag:
-            s.error = f"feeder: {type(e).__name__}: {str(e)[:160]}"
-            s.state = "failed"
+            with s.lock:
+                s.stop_flag = True
+                s.state = "failed"
+                s.error = f"feeder: {type(e).__name__}: {str(e)[:160]}"
+            _signal_failed(s)
 
 
 def _start_emitter(s: LiveSession, fifo: Path) -> subprocess.Popen:
@@ -291,7 +340,10 @@ async def start_live(
     lipsync_url: str | None = None, lipsync_model: str | None = None,
     video_quality: str = "720p", sound_mode: str = "normal", lip_blend: int = 30,
     azure_key: str | None = None, azure_region: str | None = None,
-    tts_engine: str | None = None, tts_pitch: float = 0.0, tts_emotion: str | None = None,
+    google_key: str | None = None,
+    tts_engine: str | None = None, tts_provider: str | None = None,
+    tts_pitch: float = 0.0, tts_emotion: str | None = None,
+    sovits_url: str | None = None,
 ) -> dict:
     if session_id in _sessions and _sessions[session_id].state in ("starting", "live"):
         raise RuntimeError(f"live session {session_id} already running")
@@ -305,8 +357,9 @@ async def start_live(
         voice=voice, rate=rate, avatar_image_url=avatar_image_url,
         template_url=template_url, lipsync_url=lipsync_url, lipsync_model=lipsync_model,
         video_quality=video_quality, sound_mode=sound_mode, lip_blend=lip_blend,
-        azure_key=azure_key, azure_region=azure_region,
-        tts_engine=tts_engine, tts_pitch=tts_pitch, tts_emotion=tts_emotion,
+        azure_key=azure_key, azure_region=azure_region, google_key=google_key,
+        tts_engine=tts_engine, tts_provider=tts_provider,
+        tts_pitch=tts_pitch, tts_emotion=tts_emotion, sovits_url=sovits_url,
         work=work, canvas=_CANVAS.get(video_quality, _CANVAS["720p"]),
     )
     # Landscape templates: keep the template's orientation so we don't letterbox
@@ -344,9 +397,11 @@ def live_status(session_id: str) -> dict:
     if not s:
         raise KeyError(f"unknown live session {session_id}")
     emitter_alive = s.emitter is not None and s.emitter.poll() is None
-    if s.state == "live" and not emitter_alive and not s.stop_flag:
-        s.state = "failed"
-        s.error = s.error or f"emitter exited rc={s.emitter.returncode if s.emitter else '?'}"
+    # READ-ONLY status: a GET must NOT transition session state or clobber the
+    # error string (that races the renderer promotion + can mask a real error).
+    # The feeder owns failure detection — its next fifo write raises
+    # BrokenPipeError on a dead emitter and sets state='failed' + _signal_failed.
+    # Callers get the live `emitter_alive` boolean below to detect death directly.
     return {
         "session_id": s.session_id,
         "state": s.state,

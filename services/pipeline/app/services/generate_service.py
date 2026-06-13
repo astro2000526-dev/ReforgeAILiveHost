@@ -38,6 +38,7 @@ class GenerateInput:
     # generation_id namespaces the Storage object so re-runs don't clobber
     # each other. Web side generates this when it creates the generations row.
     generation_id: str | None = None
+    video_quality: str = "1080p"   # 1080p | 720p | 480p — drives streaming bitrate tier
 
 
 @dataclass
@@ -99,7 +100,7 @@ async def generate(
 
     await progress("transcode", 85)
     final = OUTPUT_DIR / f"{inp.project_id}.mp4"
-    await transcode_for_streaming(restored, final)
+    await transcode_for_streaming(restored, final, inp.video_quality)
 
     url: str | None = None
     if storage_enabled():
@@ -135,6 +136,7 @@ async def run_job(req: GenerateRequest) -> None:
                 voice=req.voice,
                 rate=req.rate,
                 generation_id=req.generation_id,
+                video_quality=req.video_quality,
             ),
             progress=progress,
         )

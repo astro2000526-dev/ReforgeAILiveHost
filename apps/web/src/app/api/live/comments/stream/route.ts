@@ -32,7 +32,11 @@ export async function GET(request: Request) {
         const fresh = res.data.filter((c) => !seen.has(c.id))
         if (fresh.length) {
           fresh.forEach((c) => seen.add(c.id))
-          after = fresh[fresh.length - 1].created_time
+          // FB created_time is second-resolution. Rewind the cursor 1s so a
+          // comment landing in the SAME second as the newest one isn't dropped
+          // by the strict `> afterMs` filter; the `seen` Set blocks re-emission.
+          const newest = Date.parse(fresh[fresh.length - 1].created_time)
+          after = new Date(newest - 1000).toISOString()
           send({ comments: fresh })
         }
       } else {

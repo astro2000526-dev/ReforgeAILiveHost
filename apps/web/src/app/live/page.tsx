@@ -179,7 +179,7 @@ export default function LiveConsolePage() {
   }, [])
 
   // ── post reply to FB ──
-  const postReply = useCallback(async (id: string, message: string) => {
+  const postReply = useCallback(async (id: string, message: string): Promise<boolean> => {
     setComments((xs) => xs.map((x) => (x.id === id ? { ...x, postPending: true, postError: undefined } : x)))
     try {
       const r = await fetch('/api/live/reply', {
@@ -189,8 +189,10 @@ export default function LiveConsolePage() {
       const d = (await r.json()) as { ok?: boolean; error?: string }
       if (!r.ok || !d.ok) throw new Error(d.error ?? `HTTP ${r.status}`)
       setComments((xs) => xs.map((x) => (x.id === id ? { ...x, posted: true, postPending: false } : x)))
+      return true
     } catch (e) {
       setComments((xs) => xs.map((x) => (x.id === id ? { ...x, postPending: false, postError: e instanceof Error ? e.message : String(e) } : x)))
+      return false
     }
   }, [])
 
@@ -213,7 +215,7 @@ export default function LiveConsolePage() {
     let posted = false
     let spoken = false
     if (reply && reply !== '—') {
-      if (autoPostRef.current) { await postReply(c.id, reply); posted = true }
+      if (autoPostRef.current) posted = await postReply(c.id, reply)
       if (autoSpeakRef.current) {
         spoken = await speak(reply)
         if (spoken) setComments((xs) => xs.map((x) => (x.id === c.id ? { ...x, spoken: true } : x)))

@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server'
 
 import { sanitizeQA } from '@/lib/reply-presets'
+import { isMissingRelation } from '@/lib/server/schema-drift'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import type { QAPair } from '@/lib/types'
 
@@ -17,6 +18,9 @@ export async function GET() {
     .eq('is_active', true)
     .order('created_at', { ascending: false })
 
+  // DB hasn't run 0007 yet → no presets table: degrade to an empty list so the
+  // presets page + live-console dropdown still load instead of 500-ing.
+  if (error && isMissingRelation(error)) return NextResponse.json({ presets: [] })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ presets: data ?? [] })
 }
@@ -50,6 +54,8 @@ export async function POST(request: Request) {
     .select(SELECT)
     .single()
 
+  if (error && isMissingRelation(error))
+    return NextResponse.json({ error: 'preset storage not provisioned — apply DB migration 0007_reply_presets' }, { status: 503 })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ preset: data })
 }

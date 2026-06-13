@@ -29,9 +29,12 @@ class LiveStartRequest(BaseModel):
     lip_blend: int = 30
     azure_key: str | None = None
     azure_region: str | None = None
+    google_key: str | None = None        # Google Cloud TTS API key (from Settings)
     tts_engine: str | None = None        # "sovits" | None
+    tts_provider: str | None = None      # explicit Settings choice: google|azure|edge-tts
     tts_pitch: float = 0.0
     tts_emotion: str | None = None
+    sovits_url: str | None = None        # GPT-SoVITS service URL (else env default)
 
 
 class LiveFeedRequest(BaseModel):

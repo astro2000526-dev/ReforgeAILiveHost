@@ -70,7 +70,10 @@ export function ProjectActionPanel({
     fetch(`/api/projects/${projectId}/render-status`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((js) => {
-        if (alive && js && js.status === 'rendering') {
+        // Re-attach for any non-terminal job, not just 'rendering' — the pipeline
+        // starts a job in 'queued' and a reload during that window would otherwise
+        // leave the UI on the idle button while the render finishes server-side.
+        if (alive && js && js.status && !['done', 'failed', 'cancelled'].includes(js.status)) {
           setRendering(true)
           setRenderPct(js.pct ?? 0)
           watchRender()

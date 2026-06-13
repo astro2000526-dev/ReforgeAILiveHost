@@ -61,7 +61,10 @@ def _build_ssml(text: str, voice: str, rate: str) -> str:
 class AzureTTSProvider:
     name = "azure"
 
-    DEFAULT_OUTPUT_FORMAT = "audio-24khz-48kbitrate-mono-mp3"
+    # 96kbit (was 48kbit) — the synth output is loudnorm-filtered then re-encoded
+    # to AAC downstream, so a higher-bitrate source avoids compounding mp3 loss on
+    # the product voice. Azure bills per character, not bitrate — quality is free.
+    DEFAULT_OUTPUT_FORMAT = "audio-24khz-96kbitrate-mono-mp3"
 
     def __init__(
         self,

@@ -18,6 +18,7 @@ import { DEMO_USER_ID } from '@/lib/demo-user'
 import { pipelineFetch } from '@/lib/pipeline-client'
 import { supabaseAdmin } from '@/lib/supabase-server'
 import { getSystemConfig } from '@/lib/system-config-server'
+import { isMissingColumn, withAvatarDefaults } from '@/lib/server/schema-drift'
 import type { AvatarJoin, Segment } from '@/lib/types'
 
 type Row = {
@@ -42,17 +43,25 @@ export async function POST(
   }
   const duration = Math.max(1, Math.min(Number(body.duration_seconds) || 30, 3600))
 
-  const { data, error } = await supabaseAdmin
-    .from('projects')
-    .select(`id, name, voice, speech_rate, script_segments, avatar:avatars (template_video_url, preview_image_url, bg_remove, background_url, background_type, camera_zoom, frame_position, frame_scale)`)
-    .eq('id', id)
-    .eq('user_id', DEMO_USER_ID)
-    .maybeSingle<Row>()
+  const AVATAR_JOIN_FULL = 'avatar:avatars (template_video_url, preview_image_url, bg_remove, background_url, background_type, camera_zoom, frame_position, frame_scale)'
+  const AVATAR_JOIN_BASE = 'avatar:avatars (template_video_url, preview_image_url)'
+  const run = (join: string) =>
+    supabaseAdmin
+      .from('projects')
+      .select(`id, name, voice, speech_rate, script_segments, ${join}`)
+      .eq('id', id)
+      .eq('user_id', DEMO_USER_ID)
+      .maybeSingle<Row>()
+
+  // Tolerate a DB behind 0005/0006: drop the avatar ext columns from the join.
+  let { data, error } = await run(AVATAR_JOIN_FULL)
+  if (error && isMissingColumn(error)) ({ data, error } = await run(AVATAR_JOIN_BASE))
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data) return NextResponse.json({ error: 'project not found' }, { status: 404 })
 
-  const avatar = Array.isArray(data.avatar) ? data.avatar[0] : data.avatar
+  const avatarRaw = Array.isArray(data.avatar) ? data.avatar[0] : data.avatar
+  const avatar = withAvatarDefaults(avatarRaw as Record<string, unknown> | null) as AvatarJoin | null
   const generationId = randomUUID()
   const cfg = await getSystemConfig()
 
@@ -110,11 +119,14 @@ export async function POST(
       lip_blend: typeof cfg.lip_blend === 'number' ? cfg.lip_blend : 30,
       azure_key: cfg.azure_speech_key || null,
       azure_region: cfg.azure_speech_region || 'eastus',
+      google_key: cfg.google_tts_key || null,
+      tts_provider: cfg.tts_provider,
       lipsync_model: cfg.lipsync_model || 'wav2lip',
       // High-quality TTS (GPT-SoVITS) — engine + pitch + emotion (pipeline RenderRequest).
       tts_engine: cfg.sovits_enabled ? 'sovits' : null,
       tts_pitch: Number(cfg.tts_pitch) || 0,
       tts_emotion: cfg.tts_emotion || null,
+      sovits_url: cfg.sovits_url || null,
       // Per-presenter background & camera settings (avatar-level).
       bg_remove: !!avatar?.bg_remove,
       background_url: avatar?.background_url ?? null,

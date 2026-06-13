@@ -41,7 +41,10 @@ type CreateProjectBody = {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as Partial<CreateProjectBody>
+  let body: Partial<CreateProjectBody> = {}
+  try { body = (await request.json()) as Partial<CreateProjectBody> } catch {
+    return NextResponse.json({ error: 'invalid JSON body' }, { status: 400 })
+  }
 
   if (!body.name || !body.avatar_id || !body.language || !body.voice) {
     return NextResponse.json(

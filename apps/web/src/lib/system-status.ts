@@ -7,6 +7,11 @@ import { pipelineFetch } from '@/lib/pipeline-client'
 import { supabaseAdmin } from '@/lib/supabase-server'
 
 export async function getSystemStatus(): Promise<Record<string, unknown>> {
+  // Each DB query is guarded the same way the pipeline call is: a network-layer
+  // reject degrades to { data: null } instead of rejecting the whole Promise.all
+  // and 500-ing the GET route (DB-down should degrade, not error — symmetric with
+  // the "pipeline down is normal" contract above). The inline two-arg .then keeps
+  // each query's row typing intact.
   const [pipeline, projects, generations, streams] = await Promise.all([
     pipelineFetch('/system/status').catch((e: unknown) => ({
       ok: false as const,
@@ -15,17 +20,20 @@ export async function getSystemStatus(): Promise<Record<string, unknown>> {
     supabaseAdmin
       .from('projects')
       .select('id, name, status')
-      .eq('user_id', DEMO_USER_ID),
+      .eq('user_id', DEMO_USER_ID)
+      .then((r) => r, () => ({ data: null })),
     supabaseAdmin
       .from('generations')
       .select('id, project_id, status, progress, error_message, created_at, finished_at')
       .order('created_at', { ascending: false })
-      .limit(20),
+      .limit(20)
+      .then((r) => r, () => ({ data: null })),
     supabaseAdmin
       .from('streams')
       .select('id, project_id, status, started_at, duration_seconds, created_at')
       .order('created_at', { ascending: false })
-      .limit(20),
+      .limit(20)
+      .then((r) => r, () => ({ data: null })),
   ])
 
   const projectName = new Map((projects.data ?? []).map((p) => [p.id, p.name]))

@@ -21,6 +21,35 @@ const TH_VOICES = ['th-TH-PremwadeeNeural', 'th-TH-NiwatNeural', 'th-TH-AcharaNe
 const ZH_VOICES = ['BV001_streaming', 'BV700_streaming', 'BV421_streaming']
 const EN_VOICES = ['en-US-JennyNeural', 'en-US-GuyNeural']
 
+// Google Cloud TTS voices. Standard = cheapest (~$4/1M chars), Neural2/WaveNet
+// = high quality (~$16/1M), Chirp3-HD = top conversational quality (~$30/1M).
+const GOOGLE_TH_VOICES = [
+  { id: 'th-TH-Standard-A', label: 'หญิง — Standard (ประหยัดสุด)' },
+  { id: 'th-TH-Neural2-C', label: 'หญิง — Neural2 (คุณภาพสูง)' },
+  { id: 'th-TH-Chirp3-HD-Achernar', label: 'หญิง — Chirp3-HD (สมจริงสุด)' },
+]
+const GOOGLE_EN_VOICES = [
+  { id: 'en-US-Standard-F', label: 'EN female — Standard' },
+  { id: 'en-US-Neural2-F', label: 'EN female — Neural2' },
+  { id: 'en-US-Chirp3-HD-Aoede', label: 'EN female — Chirp3-HD' },
+]
+const GOOGLE_ZH_VOICES = [
+  { id: 'cmn-CN-Standard-A', label: '中文 — Standard' },
+  { id: 'cmn-CN-Wavenet-A', label: '中文 — Wavenet' },
+]
+const GOOGLE_VOICE_IDS = [...GOOGLE_TH_VOICES, ...GOOGLE_EN_VOICES, ...GOOGLE_ZH_VOICES].map((v) => v.id)
+const AZURE_EDGE_VOICE_IDS = [...TH_VOICES, ...ZH_VOICES, ...EN_VOICES]
+
+// Keep tts_voice consistent with the selected provider so the controlled <select>
+// always has a matching <option> (an out-of-range value renders blank in React 19)
+// and a stale cross-provider id is never persisted. Volcengine has no picker → leave as-is.
+function voiceForProvider(provider: SystemConfig['tts_provider'], current: string): string {
+  if (provider === 'google') return GOOGLE_VOICE_IDS.includes(current) ? current : GOOGLE_TH_VOICES[0].id
+  if (provider === 'azure' || provider === 'edge-tts')
+    return AZURE_EDGE_VOICE_IDS.includes(current) ? current : 'th-TH-PremwadeeNeural'
+  return current
+}
+
 // Appearance option metadata (hardcoded Thai — new strings, not via i18n).
 const FONT_OPTIONS: { id: AppFont; label: string; sample: string; css: string }[] = [
   { id: 'default', label: 'มาตรฐาน', sample: 'Aa ก', css: 'var(--font-sans), sans-serif' },
@@ -196,11 +225,11 @@ export default function SettingsPage() {
         {/* ── TTS ─────────────────────────────────────────────────────── */}
         <section className="rounded-lg border p-5 space-y-4">
           <h2 className="font-semibold">{t('set.tts.title')}</h2>
-          <div className="grid grid-cols-3 gap-2">
-            {(['edge-tts', 'azure', 'volcengine'] as const).map(p => (
-              <button key={p} type="button" onClick={() => setCfg(c => ({ ...c, tts_provider: p }))}
+          <div className="grid grid-cols-2 gap-2">
+            {(['edge-tts', 'azure', 'google', 'volcengine'] as const).map(p => (
+              <button key={p} type="button" onClick={() => setCfg(c => ({ ...c, tts_provider: p, tts_voice: voiceForProvider(p, c.tts_voice) }))}
                 className={`rounded-md border px-3 py-2 text-xs font-medium transition-colors ${cfg.tts_provider === p ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/40'}`}>
-                {p === 'edge-tts' ? t('set.tts.edge') : p === 'azure' ? t('set.tts.azure') : t('set.tts.volc')}
+                {p === 'edge-tts' ? t('set.tts.edge') : p === 'azure' ? t('set.tts.azure') : p === 'google' ? '🟢 Google Cloud' : t('set.tts.volc')}
               </button>
             ))}
           </div>
@@ -242,6 +271,34 @@ export default function SettingsPage() {
                 </div>
               </div>
               <p className="text-xs text-success">{cfg.azure_speech_key ? t('set.tts.azureSet') : t('set.tts.azureUnset')}</p>
+            </div>
+          )}
+          {cfg.tts_provider === 'google' && (
+            <div className="space-y-3 rounded-md border border-border/70 bg-muted/30 p-3">
+              <div className="space-y-1.5">
+                <Label>Google Cloud TTS API Key</Label>
+                <KeyInput placeholder="วาง API key จาก Google Cloud Console"
+                  changeLabel={t('set.key.change')} cancelLabel={t('set.key.cancel')}
+                  value={cfg.google_tts_key ?? ''}
+                  onChange={v => setCfg(p => ({ ...p, google_tts_key: v }))} />
+                <p className="text-xs text-muted-foreground">
+                  console.cloud.google.com → เปิดใช้ Cloud Text-to-Speech API → APIs &amp; Services → Credentials → สร้าง API key
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>{t('set.common.voice')}</Label>
+                <select value={cfg.tts_voice} onChange={e => setCfg(p => ({ ...p, tts_voice: e.target.value }))}
+                  className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">
+                  <optgroup label="ไทย (Thai)">{GOOGLE_TH_VOICES.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}</optgroup>
+                  <optgroup label="中文 (Chinese)">{GOOGLE_ZH_VOICES.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}</optgroup>
+                  <optgroup label="English">{GOOGLE_EN_VOICES.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}</optgroup>
+                </select>
+              </div>
+              <p className="text-xs text-success">
+                {cfg.google_tts_key
+                  ? '✓ ตั้งค่า Google key แล้ว — ราคาประหยัดกว่า Azure ~4 เท่าที่เสียง Standard'
+                  : 'ยังไม่ใส่ key → จะ fallback ไปใช้ MMS (offline)'}
+              </p>
             </div>
           )}
           {cfg.tts_provider === 'volcengine' && (
